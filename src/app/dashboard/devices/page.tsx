@@ -129,7 +129,7 @@ max_amount: cfg?.max_amount || 100,
     setTransactionsMap(map);
   }
 
-  const allTransactions = Object.values(transactionsMap).flat();
+  const allTransactions = Object.values(transactionsMap).flat() as any[];
   const totalVolume = allTransactions.reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
   const totalTransactions = allTransactions.length;
   const avgTransaction = totalTransactions ? Math.round(totalVolume / totalTransactions) : 0;
