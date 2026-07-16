@@ -16,7 +16,38 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    const { device_id, merchant_id, amount, status } = body;
+    const {
+  device_id,
+  merchant_id,
+  amount,
+  status,
+
+  transaction_id,
+  authorization_code,
+  reference_number,
+
+  batch_id,
+  trace_no,
+
+  card_issuer,
+  card_bin,
+  last4,
+
+  account_type,
+  card_entry_method,
+
+  payment_program,
+
+  host_message,
+
+  base_amount,
+  tip_amount,
+  fee_amount,
+  cashback_amount,
+  processed_amount,
+
+  transaction_data
+} = body;
 
     // ✅ Validate required fields
     if (!device_id || !merchant_id || amount === undefined || amount === null) {
