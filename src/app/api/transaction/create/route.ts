@@ -106,6 +106,8 @@ export async function POST(req: Request) {
     amount: safeAmount,
     status: finalStatus,
     payment_method: 'nexgo',
+    transaction_id:
+  transaction_data?.transactionID || null,
 
     transaction_id,
     authorization_code,
