@@ -109,7 +109,6 @@ export async function POST(req: Request) {
     transaction_id:
   transaction_data?.transactionID || null,
 
-    transaction_id,
     authorization_code,
     reference_number,
 
