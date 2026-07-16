@@ -105,7 +105,33 @@ export async function POST(req: Request) {
     merchant_id,
     amount: safeAmount,
     status: finalStatus,
-    payment_method: 'nexgo'
+    payment_method: 'nexgo',
+
+    transaction_id,
+    authorization_code,
+    reference_number,
+
+    batch_id,
+    trace_no,
+
+    card_issuer,
+    card_bin,
+    last4,
+
+    account_type,
+    card_entry_method,
+
+    payment_program,
+
+    host_message,
+
+    base_amount,
+    tip_amount,
+    fee_amount,
+    cashback_amount,
+    processed_amount,
+
+    transaction_data
   }
 ])
 
