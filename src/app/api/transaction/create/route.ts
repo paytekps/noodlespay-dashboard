@@ -15,7 +15,10 @@ const supabase = createClient(
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-
+console.log(
+  'transaction_data',
+  JSON.stringify(body.transaction_data)
+);
     const {
   device_id,
   merchant_id,
