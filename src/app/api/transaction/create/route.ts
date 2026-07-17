@@ -112,29 +112,47 @@ console.log(
     transaction_id:
   transaction_data?.transactionID || null,
 
-    authorization_code,
-    reference_number,
+authorization_code:
+  transaction_data?.authorizationCode || null,
 
-    batch_id,
-    trace_no,
+reference_number:
+  transaction_data?.referenceNumber || null,
 
-    card_issuer,
-    card_bin,
-    last4,
+batch_id:
+  transaction_data?.batchID || null,
 
-    account_type,
-    card_entry_method,
+trace_no:
+  transaction_data?.traceNo || null,
 
-    payment_program,
+card_issuer:
+  transaction_data?.cardIssuer || null,
 
-    host_message,
+card_bin:
+  transaction_data?.cardBIN || null,
 
-    base_amount,
-    tip_amount,
-    fee_amount,
-    cashback_amount,
-    processed_amount,
+account_type:
+  transaction_data?.accountType || null,
 
+card_entry_method:
+  transaction_data?.cardDataEntry || null,
+
+host_message:
+  transaction_data?.hostMessage || null,
+
+base_amount:
+  transaction_data?.baseAmount || null,
+
+tip_amount:
+  transaction_data?.tipAmount || null,
+
+fee_amount:
+  transaction_data?.feeAmount || null,
+
+cashback_amount:
+  transaction_data?.cashbackAmount || null,
+
+processed_amount:
+  transaction_data?.processedAmount || null,
     transaction_data
   }
 ])
