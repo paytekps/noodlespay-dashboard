@@ -101,13 +101,7 @@ console.log(
     // ✅ INSERT (FIXED — removed breaking field)
     const { data, error } = await supabase
       .from('transactions')
-console.log({
-  transactionID: transaction_data?.transactionID,
-  authorizationCode: transaction_data?.authorizationCode,
-  referenceNumber: transaction_data?.referenceNumber,
-  batchID: transaction_data?.batchID,
-  traceNo: transaction_data?.traceNo
-});
+
 .insert([
   {
     device_id,
