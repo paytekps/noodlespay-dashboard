@@ -130,12 +130,18 @@ card_issuer:
 card_bin:
   transaction_data?.cardBIN || null,
 
+last4:
+  transaction_data?.cardNumber || null,
+    
 account_type:
   transaction_data?.accountType || null,
 
 card_entry_method:
   transaction_data?.cardDataEntry || null,
 
+payment_program:
+  transaction_data?.cardIssuer || null,
+    
 host_message:
   transaction_data?.hostMessage || null,
 
@@ -153,13 +159,7 @@ cashback_amount:
 
 processed_amount:
   transaction_data?.processedAmount || null,
-    transaction_data
-      
-payment_program:
-  transaction_data?.cardIssuer || null,
-
-last4:
-  transaction_data?.cardNumber || null,
+    transaction_data   
   }
 ])
 
