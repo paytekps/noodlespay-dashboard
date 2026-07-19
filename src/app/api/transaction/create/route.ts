@@ -160,6 +160,12 @@ cashback_amount:
 processed_amount:
   transaction_data?.processedAmount || null,
     transaction_data
+      
+payment_program:
+  transaction_data?.cardIssuer || null,
+
+last4:
+  transaction_data?.cardNumber || null,
   }
 ])
 
