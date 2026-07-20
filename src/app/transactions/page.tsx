@@ -191,17 +191,19 @@ const filteredTransactions = transactions.filter((t) => {
 )}
       <div className="border rounded-lg overflow-hidden">
         <table className="w-full text-left">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="p-3">Time</th>
-<th className="p-3">Merchant</th>
-              <th className="p-3">Device</th>
-              <th className="p-3">Amount</th>
-              <th className="p-3">Status</th>
-              <th className="p-3">Method</th>
-              <th className="p-3">Details</th>
-            </tr>
-          </thead>
+<thead className="bg-gray-100">
+  <tr>
+    <th className="p-3">Time</th>
+    <th className="p-3">Merchant</th>
+    <th className="p-3">Device</th>
+    <th className="p-3">Amount</th>
+    <th className="p-3">Status</th>
+    <th className="p-3">Card</th>
+    <th className="p-3">Last 4</th>
+    <th className="p-3">Method</th>
+    <th className="p-3">Details</th>
+  </tr>
+</thead>
 
           <tbody>
 {filteredTransactions.map((t) => (
@@ -235,7 +237,13 @@ const filteredTransactions = transactions.filter((t) => {
                     {t.status}
                   </span>
                 </td>
+<td className="p-3">
+  {t.card_issuer || '—'}
+</td>
 
+<td className="p-3">
+  {t.last4 || '—'}
+</td>
                 <td className="p-3 text-sm text-gray-600">
                   {t.payment_method}
                 </td>
