@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase';
 
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<any[]>([]);
-
+const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   useEffect(() => {
     loadTransactions();
   }, []);
@@ -118,12 +118,7 @@ export default function TransactionsPage() {
                 </td>
                 <td className="p-3">
   <button
-    onClick={() => alert(
-  `Transaction ID: ${t.transaction_id}\n` +
-  `Card: ${t.card_issuer}\n` +
-  `Last 4: ${t.last4}\n` +
-  `Auth Code: ${t.authorization_code}`
-)}
+onClick={() => setSelectedTransaction(t)}
     className="text-blue-600 underline"
   >
     View
