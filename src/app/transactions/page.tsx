@@ -10,9 +10,27 @@ const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
 const [search, setSearch] = useState('');
 const [statusFilter, setStatusFilter] = useState('all');
 const [brandFilter, setBrandFilter] = useState('all');
-  useEffect(() => {
-    loadTransactions();
-  }, []);
+const [profile, setProfile] = useState<any>(null);
+useEffect(() => {
+  loadProfile();
+  loadTransactions();
+}, []);
+
+async function loadProfile() {
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) return;
+
+  const { data } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .single();
+
+  setProfile(data);
+}
 
   async function loadTransactions() {
     const { data, error } = await supabase
@@ -164,6 +182,8 @@ const filteredTransactions = transactions.filter((t) => {
     <div>
       Host Message: {selectedTransaction.host_message}
     </div>
+    {profile?.role === 'admin' && (
+<>
     <h3 className="font-semibold mt-4 mb-2">
   Admin
 </h3>
@@ -187,6 +207,8 @@ const filteredTransactions = transactions.filter((t) => {
 <div>
   Processed Amount: ${selectedTransaction.processed_amount}
 </div>
+  </>
+)}
   </div>
 )}
       <div className="border rounded-lg overflow-hidden">
