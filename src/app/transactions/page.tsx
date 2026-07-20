@@ -76,6 +76,7 @@ export default function TransactionsPage() {
               <th className="p-3">Amount</th>
               <th className="p-3">Status</th>
               <th className="p-3">Method</th>
+              <th className="p-3">Details</th>
             </tr>
           </thead>
 
@@ -115,6 +116,14 @@ export default function TransactionsPage() {
                 <td className="p-3 text-sm text-gray-600">
                   {t.payment_method}
                 </td>
+                <td className="p-3">
+  <button
+    onClick={() => console.log(t)}
+    className="text-blue-600 underline"
+  >
+    View
+  </button>
+</td>
               </tr>
             ))}
           </tbody>
