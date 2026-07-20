@@ -118,7 +118,12 @@ export default function TransactionsPage() {
                 </td>
                 <td className="p-3">
   <button
-    onClick={() => console.log(t)}
+    onClick={() => alert(
+  `Transaction ID: ${t.transaction_id}\n` +
+  `Card: ${t.card_issuer}\n` +
+  `Last 4: ${t.last4}\n` +
+  `Auth Code: ${t.authorization_code}`
+)}
     className="text-blue-600 underline"
   >
     View
