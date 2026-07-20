@@ -101,7 +101,10 @@ console.log(
     // ✅ INSERT (FIXED — removed breaking field)
     const { data, error } = await supabase
       .from('transactions')
-
+console.log({
+  cardIssuer: transaction_data?.cardIssuer,
+  cardNumber: transaction_data?.cardNumber
+});
 .insert([
   {
     device_id,
