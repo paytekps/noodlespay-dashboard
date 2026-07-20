@@ -70,11 +70,22 @@ const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
     <h2 className="text-lg font-bold mb-3">
       Transaction Details
     </h2>
+<button
+  onClick={() => setSelectedTransaction(null)}
+  className="mb-4 px-3 py-1 bg-gray-200 rounded"
+>
+  Close
+</button>
+<h3 className="font-semibold mb-2">Transaction</h3>
 
-    <div>Transaction ID: {selectedTransaction.transaction_id}</div>
-    <div>Status: {selectedTransaction.status}</div>
-    <div>Amount: ${selectedTransaction.amount}</div>
-
+<div>Transaction ID: {selectedTransaction.transaction_id}</div>
+<div>Status: {selectedTransaction.status}</div>
+<div>Amount: ${selectedTransaction.amount}</div>
+<div>
+  Date:
+  {new Date(selectedTransaction.created_at).toLocaleString()}
+</div>
+<h3 className="font-semibold mt-4 mb-2">Card</h3>
     <div className="mt-3">
       Card: {selectedTransaction.card_issuer}
     </div>
@@ -82,14 +93,14 @@ const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
     <div>Last 4: {selectedTransaction.last4}</div>
     <div>Account Type: {selectedTransaction.account_type}</div>
     <div>Entry Method: {selectedTransaction.card_entry_method}</div>
-
+<h3 className="font-semibold mt-4 mb-2">Authorization</h3>
     <div className="mt-3">
       Authorization Code: {selectedTransaction.authorization_code}
     </div>
     <div>Reference Number: {selectedTransaction.reference_number}</div>
     <div>Batch ID: {selectedTransaction.batch_id}</div>
     <div>Trace No: {selectedTransaction.trace_no}</div>
-
+<h3 className="font-semibold mt-4 mb-2">Program</h3>
     <div className="mt-3">
       Payment Program: {selectedTransaction.payment_program}
     </div>
