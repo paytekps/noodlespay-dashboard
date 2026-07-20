@@ -206,7 +206,17 @@ const filteredTransactions = transactions.filter((t) => {
 </thead>
 
           <tbody>
-{filteredTransactions.map((t) => (
+{filteredTransactions.length === 0 ? (
+  <tr>
+    <td
+      colSpan={9}
+      className="p-8 text-center text-gray-500"
+    >
+      No transactions found
+    </td>
+  </tr>
+) : (
+  filteredTransactions.map((t) => (
               <tr key={t.id} className="border-t">
                 <td className="p-3 text-sm">
                   {new Date(t.created_at).toLocaleString()}
@@ -256,7 +266,8 @@ onClick={() => setSelectedTransaction(t)}
   </button>
 </td>
               </tr>
-            ))}
+))
+)}
           </tbody>
         </table>
       </div>
