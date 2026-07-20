@@ -108,6 +108,29 @@ const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
     <div>
       Host Message: {selectedTransaction.host_message}
     </div>
+    <h3 className="font-semibold mt-4 mb-2">
+  Admin
+</h3>
+
+<div>
+  Base Amount: ${selectedTransaction.base_amount}
+</div>
+
+<div>
+  Tip Amount: ${selectedTransaction.tip_amount}
+</div>
+
+<div>
+  Fee Amount: ${selectedTransaction.fee_amount}
+</div>
+
+<div>
+  Cashback Amount: ${selectedTransaction.cashback_amount}
+</div>
+
+<div>
+  Processed Amount: ${selectedTransaction.processed_amount}
+</div>
   </div>
 )}
       <div className="border rounded-lg overflow-hidden">
