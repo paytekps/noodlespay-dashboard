@@ -15,10 +15,6 @@ const supabase = createClient(
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-console.log(
-  'transaction_data',
-  JSON.stringify(body.transaction_data)
-);
     const {
   device_id,
   merchant_id,
@@ -101,10 +97,6 @@ console.log(
     // ✅ INSERT (FIXED — removed breaking field)
     const { data, error } = await supabase
       .from('transactions')
-console.log({
-  cardIssuer: transaction_data?.cardIssuer,
-  cardNumber: transaction_data?.cardNumber
-});
 .insert([
   {
     device_id,
