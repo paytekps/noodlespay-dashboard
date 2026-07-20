@@ -65,7 +65,40 @@ const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   return (
     <div className="p-10">
       <h1 className="text-2xl font-bold mb-6">Transactions</h1>
+{selectedTransaction && (
+  <div className="mb-6 p-4 border rounded-lg bg-white">
+    <h2 className="text-lg font-bold mb-3">
+      Transaction Details
+    </h2>
 
+    <div>Transaction ID: {selectedTransaction.transaction_id}</div>
+    <div>Status: {selectedTransaction.status}</div>
+    <div>Amount: ${selectedTransaction.amount}</div>
+
+    <div className="mt-3">
+      Card: {selectedTransaction.card_issuer}
+    </div>
+    <div>BIN: {selectedTransaction.card_bin}</div>
+    <div>Last 4: {selectedTransaction.last4}</div>
+    <div>Account Type: {selectedTransaction.account_type}</div>
+    <div>Entry Method: {selectedTransaction.card_entry_method}</div>
+
+    <div className="mt-3">
+      Authorization Code: {selectedTransaction.authorization_code}
+    </div>
+    <div>Reference Number: {selectedTransaction.reference_number}</div>
+    <div>Batch ID: {selectedTransaction.batch_id}</div>
+    <div>Trace No: {selectedTransaction.trace_no}</div>
+
+    <div className="mt-3">
+      Payment Program: {selectedTransaction.payment_program}
+    </div>
+
+    <div>
+      Host Message: {selectedTransaction.host_message}
+    </div>
+  </div>
+)}
       <div className="border rounded-lg overflow-hidden">
         <table className="w-full text-left">
           <thead className="bg-gray-100">
