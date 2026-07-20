@@ -4,8 +4,12 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 
 export default function TransactionsPage() {
-  const [transactions, setTransactions] = useState<any[]>([]);
+const [transactions, setTransactions] = useState<any[]>([]);
 const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
+
+const [search, setSearch] = useState('');
+const [statusFilter, setStatusFilter] = useState('all');
+const [brandFilter, setBrandFilter] = useState('all');
   useEffect(() => {
     loadTransactions();
   }, []);
@@ -59,12 +63,64 @@ const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
       return;
     }
 
-    setTransactions(data || []);
-  }
+setTransactions(data || []);
+}
+
+const filteredTransactions = transactions.filter((t) => {
+  const q = search.toLowerCase();
+
+  const matchesSearch =
+    (t.transaction_id || '').toLowerCase().includes(q) ||
+    (t.authorization_code || '').toLowerCase().includes(q) ||
+    (t.reference_number || '').toLowerCase().includes(q) ||
+    (t.card_bin || '').toLowerCase().includes(q) ||
+    (t.last4 || '').toLowerCase().includes(q);
+
+  const matchesStatus =
+    statusFilter === 'all' ||
+    t.status === statusFilter;
+
+  const matchesBrand =
+    brandFilter === 'all' ||
+    t.card_issuer === brandFilter;
+
+  return matchesSearch && matchesStatus && matchesBrand;
+});
 
   return (
     <div className="p-10">
       <h1 className="text-2xl font-bold mb-6">Transactions</h1>
+      <div className="mb-6 flex gap-3">
+  <input
+    type="text"
+    placeholder="Search..."
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+    className="border px-3 py-2 rounded flex-1"
+  />
+
+  <select
+    value={statusFilter}
+    onChange={(e) => setStatusFilter(e.target.value)}
+    className="border px-3 py-2 rounded"
+  >
+    <option value="all">All Statuses</option>
+    <option value="approved">Approved</option>
+    <option value="declined">Declined</option>
+  </select>
+
+  <select
+    value={brandFilter}
+    onChange={(e) => setBrandFilter(e.target.value)}
+    className="border px-3 py-2 rounded"
+  >
+    <option value="all">All Cards</option>
+    <option value="Visa">Visa</option>
+    <option value="Mastercard">Mastercard</option>
+    <option value="Amex">Amex</option>
+    <option value="Discover">Discover</option>
+  </select>
+</div>
 {selectedTransaction && (
   <div className="mb-6 p-4 border rounded-lg bg-white">
     <h2 className="text-lg font-bold mb-3">
@@ -148,7 +204,7 @@ const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
           </thead>
 
           <tbody>
-            {transactions.map((t) => (
+{filteredTransactions.map((t) => (
               <tr key={t.id} className="border-t">
                 <td className="p-3 text-sm">
                   {new Date(t.created_at).toLocaleString()}
