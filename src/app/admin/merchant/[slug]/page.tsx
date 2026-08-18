@@ -97,20 +97,31 @@ setSerialNumber('');
   }
 
 async function updateConfig(deviceId: string, values: any) {
-  const { error } = await supabase
+  const { data: existing, error: lookupError } = await supabase
     .from('device_config')
-    .upsert(
-      {
-        device_id: deviceId,
-        ...values
-      },
-      {
-        onConflict: 'device_id'
-      }
-    );
+    .select('id')
+    .eq('device_id', deviceId)
+    .maybeSingle();
 
-  if (error) {
-    alert(`Plan update failed: ${error.message}`);
+  if (lookupError) {
+    alert(`Plan lookup failed: ${lookupError.message}`);
+    return;
+  }
+
+  const result = existing
+    ? await supabase
+        .from('device_config')
+        .update(values)
+        .eq('id', existing.id)
+    : await supabase
+        .from('device_config')
+        .insert({
+          device_id: deviceId,
+          ...values
+        });
+
+  if (result.error) {
+    alert(`Plan update failed: ${result.error.message}`);
     return;
   }
 
