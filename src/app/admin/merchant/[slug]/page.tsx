@@ -96,17 +96,26 @@ setSerialNumber('');
     loadData();
   }
 
-  async function updateConfig(id: string, values: any) {
-    if (!id) return;
+async function updateConfig(deviceId: string, values: any) {
+  const { error } = await supabase
+    .from('device_config')
+    .upsert(
+      {
+        device_id: deviceId,
+        ...values
+      },
+      {
+        onConflict: 'device_id'
+      }
+    );
 
-    await supabase
-      .from('device_config')
-      .update(values)
-      .eq('id', id);
-
-    loadData();
+  if (error) {
+    alert(`Plan update failed: ${error.message}`);
+    return;
   }
 
+  loadData();
+}
   const canChangePlan = role === 'admin';
 
   if (!merchant) {
@@ -166,7 +175,7 @@ setSerialNumber('');
               value={d.plan}
               onChange={(e) => {
                 const plan = e.target.value;
-                updateConfig(d.configId, applyPlan(plan));
+                updateConfig(d.id, applyPlan(plan));
               }}
               className="border px-3 py-2 rounded mt-2"
             >
