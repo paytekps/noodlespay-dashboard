@@ -134,14 +134,27 @@ max_amount: cfg?.max_amount || 100,
   const totalTransactions = allTransactions.length;
   const avgTransaction = totalTransactions ? Math.round(totalVolume / totalTransactions) : 0;
 
-  async function updateConfig(deviceId: string, values: any) {
-    await supabase
-      .from('device_config')
-      .update(values)
-      .eq('device_id', deviceId);
+async function updateConfig(deviceId: string, values: any) {
+  const { error } = await supabase
+    .from('device_config')
+    .upsert(
+      {
+        device_id: deviceId,
+        ...values
+      },
+      {
+        onConflict: 'device_id'
+      }
+    );
 
-    loadDevices();
+  if (error) {
+    console.error('Config update failed:', error);
+    alert(`Config update failed: ${error.message}`);
+    return;
   }
+
+  loadDevices();
+}
 
   async function saveDisplayText(deviceId: string) {
     const value = editingText[deviceId];
