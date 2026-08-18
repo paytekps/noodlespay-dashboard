@@ -145,7 +145,7 @@ async function updateConfig(deviceId: string, values: any) {
       {
         onConflict: 'device_id'
       }
-    ); 
+    );
   
   if (error) {
     console.error('Config update failed:', error);
