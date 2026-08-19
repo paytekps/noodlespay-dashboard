@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useRouter } from 'next/navigation';
+import { isUserRole, landingPageForRole } from '../lib/roles';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -26,25 +27,24 @@ export default function Login() {
     if (!user) return;
 
     // ✅ get profile (CRITICAL FIX)
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single();
 
-    if (!profile) return;
-
-    // ✅ redirect based on role (KEY CHANGE)
-    if (profile.role === 'admin') {
-      router.push('/admin');
-    } else {
-      router.push('/dashboard/devices');
+    if (profileError || !profile || !isUserRole(profile.role)) {
+      await supabase.auth.signOut();
+      alert('This account does not have an assigned Gimml user type.');
+      return;
     }
+
+    router.push(landingPageForRole(profile.role));
   }
 
   return (
     <div className="p-10">
-      <h1 className="text-xl font-bold">NoodlesPay Login</h1>
+      <h1 className="text-xl font-bold">Gimml Login</h1>
 
       <input
         placeholder="Email"
