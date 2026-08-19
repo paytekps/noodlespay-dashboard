@@ -236,7 +236,12 @@ async function saveConfig(device: any) {
           <div key={d.id} className="bg-white p-6 rounded-xl shadow space-y-4">
 
             <div>
-              <div className="font-semibold text-lg">{d.name}</div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="font-semibold text-lg">{d.name}</div>
+                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold uppercase text-gray-600">
+                  {d.plan}
+                </span>
+              </div>
               {profile?.role !== 'merchant' && (
                 <div className="text-sm text-gray-500">{d.merchant_name}</div>
               )}
@@ -277,8 +282,9 @@ async function saveConfig(device: any) {
   />
 </div>
 
-            {/* PRESETS */}
-            <div>
+            {/* PREMIUM PRESETS */}
+            {d.plan === 'premium' && (
+              <div>
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -307,10 +313,12 @@ async function saveConfig(device: any) {
                   ))}
                 </div>
               )}
-            </div>
+              </div>
+            )}
 
-            {/* INCREMENT */}
-            <div>
+            {/* PRO AND PREMIUM INCREMENT */}
+            {(d.plan === 'pro' || d.plan === 'premium') && (
+              <div className="space-y-3">
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -323,37 +331,54 @@ async function saveConfig(device: any) {
               </label>
 
               {d.enable_increment && (
-                <input
-                  type="number"
-                  value={d.step}
-                  onChange={(e) =>
-                    updateLocalConfig(d.id, {
-                      step: Number(e.target.value)
-                    })
-                  }
-                  className="border px-2 py-1 rounded w-full mt-2"
-                />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="text-sm">
+                    Increment Amount
+                    <input
+                      type="number"
+                      value={d.step}
+                      onChange={(e) =>
+                        updateLocalConfig(d.id, {
+                          step: Number(e.target.value)
+                        })
+                      }
+                      className="border px-2 py-1 rounded w-full mt-1"
+                    />
+                  </label>
+                  <label className="text-sm">
+                    Maximum Amount
+                    <input
+                      type="number"
+                      value={d.max_amount}
+                      onChange={(e) =>
+                        updateLocalConfig(d.id, {
+                          max_amount: Number(e.target.value)
+                        })
+                      }
+                      className="border px-2 py-1 rounded w-full mt-1"
+                    />
+                  </label>
+                </div>
               )}
-            </div>
-{/* MAX AMOUNT */}
-<div>
-  <label className="block mb-1">
-    Maximum Amount
-  </label>
+              </div>
+            )}
 
-  <input
-    type="number"
-    value={d.max_amount}
-    onChange={(e) =>
-      updateLocalConfig(d.id, {
-        max_amount: Number(e.target.value)
-      })
-    }
-    className="border px-2 py-1 rounded w-full"
-  />
-</div>
-            {/* RESET MODE */}
-            <div>
+            {d.plan === 'basic' && (
+              <div className="rounded-lg bg-gray-50 p-3 text-sm text-gray-600">
+                Basic devices show the saved amount without presets, increment, or reset controls.
+              </div>
+            )}
+
+            {d.plan === 'pro' && (
+              <div className="rounded-lg bg-gray-50 p-3 text-sm text-gray-600">
+                Manual reset is included with Pro.
+              </div>
+            )}
+
+            {/* PREMIUM RESET MODE */}
+            {d.plan === 'premium' && (
+              <div>
+              <label className="block text-sm mb-1">Reset</label>
               <select
                 value={d.reset_mode}
                 onChange={(e) =>
@@ -377,7 +402,8 @@ async function saveConfig(device: any) {
                   className="border px-2 py-1 rounded w-full mt-2"
                 />
               )}
-            </div>
+              </div>
+            )}
 
             <div className="flex items-center gap-3 pt-2">
               <button
