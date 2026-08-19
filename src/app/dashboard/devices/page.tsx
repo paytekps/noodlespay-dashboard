@@ -3,6 +3,58 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../../lib/supabase';
 
+function getConfigErrors(device: any, displayText: string) {
+  const errors: string[] = [];
+  const isPositiveAmount = (value: number) => Number.isFinite(value) && value > 0;
+  const hasAtMostTwoDecimals = (value: number) =>
+    Math.abs(value * 100 - Math.round(value * 100)) < Number.EPSILON * 100;
+
+  if (!isPositiveAmount(device.default_amount)) {
+    errors.push('Default amount must be greater than $0.');
+  } else if (!hasAtMostTwoDecimals(device.default_amount)) {
+    errors.push('Default amount can have no more than two decimal places.');
+  }
+
+  if (!isPositiveAmount(device.max_amount)) {
+    errors.push('Maximum amount must be greater than $0.');
+  } else if (device.max_amount < device.default_amount) {
+    errors.push('Maximum amount cannot be lower than the default amount.');
+  } else if (!hasAtMostTwoDecimals(device.max_amount)) {
+    errors.push('Maximum amount can have no more than two decimal places.');
+  }
+
+  if (device.plan === 'premium' && device.enable_presets) {
+    [device.preset_1, device.preset_2, device.preset_3].forEach((preset, index) => {
+      if (!isPositiveAmount(preset)) {
+        errors.push(`Preset ${index + 1} must be greater than $0.`);
+      } else if (preset > device.max_amount) {
+        errors.push(`Preset ${index + 1} cannot be higher than the maximum amount.`);
+      } else if (!hasAtMostTwoDecimals(preset)) {
+        errors.push(`Preset ${index + 1} can have no more than two decimal places.`);
+      }
+    });
+  }
+
+  if ((device.plan === 'pro' || device.plan === 'premium') && device.enable_increment) {
+    if (!isPositiveAmount(device.step)) {
+      errors.push('Increment amount must be greater than $0.');
+    } else if (!hasAtMostTwoDecimals(device.step)) {
+      errors.push('Increment amount can have no more than two decimal places.');
+    }
+  }
+
+  if (device.plan === 'premium' && device.reset_mode === 'auto' &&
+      (!Number.isInteger(device.reset_delay) || device.reset_delay < 1)) {
+    errors.push('Auto-reset delay must be at least 1 second and use a whole number.');
+  }
+
+  if (displayText.length > 120) {
+    errors.push('Device message must be 120 characters or fewer.');
+  }
+
+  return errors;
+}
+
 export default function Devices() {
   const [devices, setDevices] = useState<any[]>([]);
   const [merchants, setMerchants] = useState<any[]>([]);
@@ -13,6 +65,7 @@ export default function Devices() {
   const [editingText, setEditingText] = useState<any>({});
   const [savingDeviceId, setSavingDeviceId] = useState<string | null>(null);
   const [savedDeviceId, setSavedDeviceId] = useState<string | null>(null);
+  const [configErrors, setConfigErrors] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     loadProfile();
@@ -139,17 +192,25 @@ max_amount: cfg?.max_amount || 100,
 
 function updateLocalConfig(deviceId: string, values: any) {
   setSavedDeviceId(null);
+  setConfigErrors(current => ({ ...current, [deviceId]: [] }));
   setDevices(current => current.map(device =>
     device.id === deviceId ? { ...device, ...values } : device
   ));
 }
 
 async function saveConfig(device: any) {
-  setSavingDeviceId(device.id);
   setSavedDeviceId(null);
 
+  const displayText = editingText[device.id] ?? device.display_text;
+  const errors = getConfigErrors(device, displayText);
+  setConfigErrors(current => ({ ...current, [device.id]: errors }));
+
+  if (errors.length) return;
+
+  setSavingDeviceId(device.id);
+
   const values = {
-    display_text: editingText[device.id] ?? device.display_text,
+    display_text: displayText,
     default_amount: device.default_amount,
     max_amount: device.max_amount,
     preset_1: device.preset_1,
@@ -254,6 +315,7 @@ async function saveConfig(device: any) {
               placeholder="Optional message"
               onChange={(e) => {
                 setSavedDeviceId(null);
+                setConfigErrors(current => ({ ...current, [d.id]: [] }));
                 setEditingText({
                   ...editingText,
                   [d.id]: e.target.value
@@ -402,6 +464,15 @@ async function saveConfig(device: any) {
                   className="border px-2 py-1 rounded w-full mt-2"
                 />
               )}
+              </div>
+            )}
+
+            {!!configErrors[d.id]?.length && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">
+                <div className="font-semibold">Please fix these settings:</div>
+                <ul className="mt-1 list-disc pl-5">
+                  {configErrors[d.id].map(error => <li key={error}>{error}</li>)}
+                </ul>
               </div>
             )}
 
