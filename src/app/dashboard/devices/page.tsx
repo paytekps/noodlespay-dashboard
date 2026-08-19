@@ -87,7 +87,8 @@ function getConfigErrors(device: any, displayText: string) {
     }
   }
 
-  if (device.plan === 'premium' && device.enable_reset && device.reset_mode === 'auto' &&
+  if ((device.plan === 'pro' || device.plan === 'premium') &&
+      device.enable_reset && device.reset_mode === 'auto' &&
       (!Number.isInteger(device.reset_delay) || device.reset_delay < 1)) {
     errors.push('Auto-reset delay must be at least 1 second and use a whole number.');
   }
@@ -308,7 +309,7 @@ async function saveConfig(device: any) {
     enable_reset: device.plan !== 'basic' && device.enable_reset,
     reset_mode: device.plan === 'basic'
       ? 'none'
-      : device.plan === 'pro' ? 'button' : device.reset_mode,
+      : device.reset_mode,
     reset_delay: device.reset_delay
   };
 
@@ -534,14 +535,7 @@ async function saveConfig(device: any) {
               </label>
             )}
 
-            {d.plan === 'pro' && (
-              <div className="rounded-lg bg-gray-50 p-3 text-sm text-gray-600">
-                Pro uses manual reset. Turn on “Show Reset on Device” above; the button then appears only after the amount changes.
-              </div>
-            )}
-
-            {/* PREMIUM RESET MODE */}
-            {d.plan === 'premium' && (
+            {(d.plan === 'pro' || d.plan === 'premium') && (
               <div>
               <label className="block text-sm mb-1">Reset</label>
               <select
@@ -557,16 +551,24 @@ async function saveConfig(device: any) {
               </select>
 
               {d.enable_reset && d.reset_mode === 'auto' && (
-                <input
-                  type="number"
-                  value={d.reset_delay}
-                  onChange={(e) =>
-                    updateLocalConfig(d.id, {
-                      reset_delay: Number(e.target.value)
-                    })
-                  }
-                  className="border px-2 py-1 rounded w-full mt-2"
-                />
+                <label className="block text-sm mt-2">
+                  Countdown seconds
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={d.reset_delay}
+                    onChange={(e) =>
+                      updateLocalConfig(d.id, {
+                        reset_delay: Number(e.target.value)
+                      })
+                    }
+                    className="border px-2 py-1 rounded w-full mt-1"
+                  />
+                  <span className="block mt-1 text-xs text-gray-500">
+                    The device counts down through 0, then resets one second later.
+                  </span>
+                </label>
               )}
               </div>
             )}

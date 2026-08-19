@@ -30,7 +30,9 @@ export function featuresForDevicePlan(
       enablePresets: false,
       enableIncrement: configuredIncrement === true,
       enableReset,
-      resetMode: enableReset ? 'button' : 'none'
+      resetMode: enableReset
+        ? configuredResetMode === 'auto' ? 'auto' : 'button'
+        : 'none'
     } as const;
   }
 
