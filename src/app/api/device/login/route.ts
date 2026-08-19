@@ -2,6 +2,10 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { supabase } from '../../../../lib/supabase';
+import {
+  featuresForDevicePlan,
+  normalizeDevicePlan
+} from '../../../../lib/device-plan';
 
 export async function POST(req: Request) {
   try {
@@ -44,6 +48,8 @@ export async function POST(req: Request) {
       .maybeSingle(); // ✅ IMPORTANT FIX
 
     const cfg = config || {};
+    const plan = normalizeDevicePlan(cfg.plan);
+    const planFeatures = featuresForDevicePlan(plan, cfg.reset_mode);
 
     // ✅ RESPONSE
     return NextResponse.json({
@@ -51,11 +57,12 @@ export async function POST(req: Request) {
       merchant_id: device.merchant_id,
 
       merchant_name: merchant?.name || 'Merchant',
+      plan,
 
       display_text: cfg.display_text ?? '',
 
-      enable_presets: cfg.enable_presets ?? false,
-      enable_increment: cfg.enable_increment ?? false,
+      enable_presets: planFeatures.enablePresets,
+      enable_increment: planFeatures.enableIncrement,
 
       default_amount: cfg.default_amount ?? 0,
       step_amount: cfg.step_amount ?? 5,
@@ -65,7 +72,7 @@ export async function POST(req: Request) {
       preset_2: cfg.preset_2 ?? 10,
       preset_3: cfg.preset_3 ?? 20,
 
-      reset_mode: cfg.reset_mode ?? 'button',
+      reset_mode: planFeatures.resetMode,
       reset_delay: cfg.reset_delay ?? 5
     });
 
