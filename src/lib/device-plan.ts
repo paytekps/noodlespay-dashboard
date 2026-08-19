@@ -19,9 +19,7 @@ export function featuresForDevicePlan(
       enablePresets: configuredPresets === true,
       enableIncrement: configuredIncrement === true,
       enableReset,
-      resetMode: enableReset
-        ? configuredResetMode === 'auto' ? 'auto' : 'button'
-        : 'none'
+      resetMode: configuredResetMode === 'auto' ? 'auto' : 'button'
     } as const;
   }
 
@@ -30,9 +28,7 @@ export function featuresForDevicePlan(
       enablePresets: false,
       enableIncrement: configuredIncrement === true,
       enableReset,
-      resetMode: enableReset
-        ? configuredResetMode === 'auto' ? 'auto' : 'button'
-        : 'none'
+      resetMode: configuredResetMode === 'auto' ? 'auto' : 'button'
     } as const;
   }
 

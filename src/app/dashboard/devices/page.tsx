@@ -88,7 +88,7 @@ function getConfigErrors(device: any, displayText: string) {
   }
 
   if ((device.plan === 'pro' || device.plan === 'premium') &&
-      device.enable_reset && device.reset_mode === 'auto' &&
+      device.reset_mode === 'auto' &&
       (!Number.isInteger(device.reset_delay) || device.reset_delay < 1)) {
     errors.push('Auto-reset delay must be at least 1 second and use a whole number.');
   }
@@ -522,7 +522,7 @@ async function saveConfig(device: any) {
               </div>
             )}
 
-            {(d.plan === 'pro' || d.plan === 'premium') && (
+            {(d.plan === 'pro' || d.plan === 'premium') && d.reset_mode === 'button' && (
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
@@ -531,7 +531,7 @@ async function saveConfig(device: any) {
                     updateLocalConfig(d.id, { enable_reset: e.target.checked })
                   }
                 />
-                Show Reset on Device
+                Show Manual Reset Button on Device
               </label>
             )}
 
@@ -540,17 +540,16 @@ async function saveConfig(device: any) {
               <label className="block text-sm mb-1">Reset</label>
               <select
                 value={d.reset_mode}
-                disabled={!d.enable_reset}
                 onChange={(e) =>
                   updateLocalConfig(d.id, { reset_mode: e.target.value })
                 }
-                className="border px-3 py-2 rounded w-full disabled:bg-gray-100 disabled:text-gray-500"
+                className="border px-3 py-2 rounded w-full"
               >
                 <option value="button">Manual Reset</option>
                 <option value="auto">Auto Reset</option>
               </select>
 
-              {d.enable_reset && d.reset_mode === 'auto' && (
+              {d.reset_mode === 'auto' && (
                 <label className="block text-sm mt-2">
                   Countdown seconds
                   <input
