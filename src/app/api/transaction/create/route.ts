@@ -147,6 +147,7 @@ export async function POST(req: Request) {
         amount: validatedAmount,
         status,
         payment_method: paymentMethod,
+        authorization_source: safeText(field('authorization_source', 'authorizationSource'), 40) || 'datecs',
         transaction_id: transactionId,
         authorization_code: safeText(field('authorization_code', 'authorizationCode'), 100),
         reference_number: safeText(field('reference_number', 'referenceNumber'), 100),
