@@ -21,9 +21,7 @@ const historyFieldLabels: Record<string, string> = {
   step_amount: 'Increment amount',
   enable_presets: 'Show presets',
   enable_increment: 'Show increment',
-  enable_reset: 'Show reset',
-  reset_mode: 'Reset mode',
-  reset_delay: 'Reset delay',
+  reset_delay: 'Automatic reset countdown',
   plan: 'Plan'
 };
 
@@ -36,7 +34,6 @@ function formatHistoryValue(field: string, value: unknown) {
   if (typeof value === 'boolean') return value ? 'Shown' : 'Hidden';
   if (moneyHistoryFields.has(field)) return `$${Number(value).toLocaleString()}`;
   if (field === 'reset_delay') return `${value} seconds`;
-  if (field === 'reset_mode') return value === 'auto' ? 'Auto reset' : 'Manual reset';
   return String(value);
 }
 
@@ -88,7 +85,6 @@ function getConfigErrors(device: any, displayText: string) {
   }
 
   if ((device.plan === 'pro' || device.plan === 'premium') &&
-      device.reset_mode === 'auto' &&
       (!Number.isInteger(device.reset_delay) || device.reset_delay < 1)) {
     errors.push('Auto-reset delay must be at least 1 second and use a whole number.');
   }
@@ -206,8 +202,6 @@ max_amount: cfg?.max_amount || 100,
           preset_3: cfg?.preset_3 || 20,
           enable_presets: cfg?.enable_presets ?? false,
           enable_increment: cfg?.enable_increment ?? false,
-          enable_reset: cfg?.enable_reset ?? false,
-          reset_mode: cfg?.reset_mode || 'button',
           reset_delay: cfg?.reset_delay || 5,
           plan: cfg?.plan || 'basic'
         };
@@ -306,10 +300,6 @@ async function saveConfig(device: any) {
     step_amount: device.step,
     enable_presets: device.plan === 'premium' && device.enable_presets,
     enable_increment: device.plan !== 'basic' && device.enable_increment,
-    enable_reset: device.plan !== 'basic' && device.enable_reset,
-    reset_mode: device.plan === 'basic'
-      ? 'none'
-      : device.reset_mode,
     reset_delay: device.reset_delay
   };
 
@@ -518,40 +508,14 @@ async function saveConfig(device: any) {
 
             {d.plan === 'basic' && (
               <div className="rounded-lg bg-gray-50 p-3 text-sm text-gray-600">
-                Basic devices show the saved amount without presets, increment, or reset controls.
+                Basic devices show only the saved amount.
               </div>
-            )}
-
-            {(d.plan === 'pro' || d.plan === 'premium') && d.reset_mode === 'button' && (
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={d.enable_reset}
-                  onChange={(e) =>
-                    updateLocalConfig(d.id, { enable_reset: e.target.checked })
-                  }
-                />
-                Show Manual Reset Button on Device
-              </label>
             )}
 
             {(d.plan === 'pro' || d.plan === 'premium') && (
               <div>
-              <label className="block text-sm mb-1">Reset</label>
-              <select
-                value={d.reset_mode}
-                onChange={(e) =>
-                  updateLocalConfig(d.id, { reset_mode: e.target.value })
-                }
-                className="border px-3 py-2 rounded w-full"
-              >
-                <option value="button">Manual Reset</option>
-                <option value="auto">Auto Reset</option>
-              </select>
-
-              {d.reset_mode === 'auto' && (
                 <label className="block text-sm mt-2">
-                  Countdown seconds
+                  Automatic reset countdown (seconds)
                   <input
                     type="number"
                     min="1"
@@ -568,7 +532,6 @@ async function saveConfig(device: any) {
                     The device counts down through 0, then resets one second later.
                   </span>
                 </label>
-              )}
               </div>
             )}
 

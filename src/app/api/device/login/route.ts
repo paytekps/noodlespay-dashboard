@@ -34,9 +34,7 @@ export async function POST(req: Request) {
     const planFeatures = featuresForDevicePlan(
       plan,
       cfg.enable_presets,
-      cfg.enable_increment,
-      cfg.enable_reset,
-      cfg.reset_mode
+      cfg.enable_increment
     );
 
     // ✅ RESPONSE
@@ -51,8 +49,6 @@ export async function POST(req: Request) {
 
       enable_presets: planFeatures.enablePresets,
       enable_increment: planFeatures.enableIncrement,
-      enable_reset: planFeatures.enableReset,
-
       default_amount: cfg.default_amount ?? 0,
       step_amount: cfg.step_amount ?? 5,
       max_amount: cfg.max_amount ?? 100,
@@ -61,7 +57,6 @@ export async function POST(req: Request) {
       preset_2: cfg.preset_2 ?? 10,
       preset_3: cfg.preset_3 ?? 20,
 
-      reset_mode: planFeatures.resetMode,
       reset_delay: cfg.reset_delay ?? 5
     });
 

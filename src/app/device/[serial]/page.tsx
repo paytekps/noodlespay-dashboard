@@ -76,8 +76,6 @@ function clearExistingTimer() {
 }
 
   function startAutoReset() {
-    if (config.reset_mode !== 'auto') return;
-
     clearExistingTimer();
 
     const delay = config.reset_delay || 5;
@@ -100,12 +98,6 @@ setIntervalTimer(interval);
     }, delay * 1000);
 
     setTimer(t);
-  }
-
-  function manualReset(e: any) {
-    e.stopPropagation();
-    clearExistingTimer();
-    setAmount(config.default_amount);
   }
 
   async function saveTransaction(statusValue: 'approved' | 'declined') {
@@ -205,7 +197,7 @@ setIntervalTimer(interval);
             </div>
 
             {/* AUTO RESET COUNTDOWN */}
-            {config.reset_mode === 'auto' && countdown !== null && (
+            {countdown !== null && (
               <div className="text-yellow-400 mb-4">
                 Resetting in: {countdown}
               </div>
@@ -244,16 +236,6 @@ setIntervalTimer(interval);
                 className="bg-green-600 px-6 py-3 rounded text-lg mb-4"
               >
                 + ${config.step_amount}
-              </button>
-            )}
-
-            {/* ✅ MANUAL RESET BUTTON */}
-            {config.reset_mode === 'button' && (
-              <button
-                onClick={manualReset}
-                className="text-yellow-400 text-lg mt-2"
-              >
-                ⟲ Reset
               </button>
             )}
 

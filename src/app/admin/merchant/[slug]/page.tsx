@@ -343,7 +343,7 @@ async function updateConfig(deviceId: string, values: any) {
                   <div>✔ Set Amount</div>
                   <div>✖ Presets</div>
                   <div>✖ Increment</div>
-                  <div>✖ Reset</div>
+                  <div>• Fixed amount</div>
                 </div>
               )}
 
@@ -352,7 +352,7 @@ async function updateConfig(deviceId: string, values: any) {
                   <div>✔ Set Amount</div>
                   <div>✖ Presets</div>
                   <div>✔ Increment</div>
-                  <div>✔ Reset (Manual)</div>
+                  <div>✔ Automatic reset</div>
                 </div>
               )}
 
@@ -361,7 +361,7 @@ async function updateConfig(deviceId: string, values: any) {
                   <div>✔ Set Amount</div>
                   <div>✔ Presets</div>
                   <div>✔ Increment</div>
-                  <div>✔ Reset (Auto + Manual)</div>
+                  <div>✔ Automatic reset</div>
                 </div>
               )}
             </div>
