@@ -157,8 +157,6 @@ setIntervalTimer(interval);
     return <div className="p-10">Loading device...</div>;
   }
 
-  const optionLine = config.display_text || '';
-
   return (
     <div
       onClick={handleTap}
@@ -185,12 +183,6 @@ setIntervalTimer(interval);
             <div className="text-gray-400 mb-2">
               {config.merchant_name}
             </div>
-
-            {optionLine && (
-              <div className="text-sm text-gray-500 mb-3">
-                {optionLine}
-              </div>
-            )}
 
             <div className="text-6xl font-bold mb-4">
               ${amount}

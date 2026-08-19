@@ -12,7 +12,6 @@ type ConfigHistoryEntry = {
 };
 
 const historyFieldLabels: Record<string, string> = {
-  display_text: 'Device message',
   default_amount: 'Default amount',
   max_amount: 'Maximum amount',
   preset_1: 'Preset 1',
@@ -44,7 +43,7 @@ function formatHistoryActor(role: string) {
   return 'System';
 }
 
-function getConfigErrors(device: any, displayText: string) {
+function getConfigErrors(device: any) {
   const errors: string[] = [];
   const isPositiveAmount = (value: number) => Number.isFinite(value) && value > 0;
   const hasAtMostTwoDecimals = (value: number) =>
@@ -89,10 +88,6 @@ function getConfigErrors(device: any, displayText: string) {
     errors.push('Auto-reset delay must be at least 1 second and use a whole number.');
   }
 
-  if (displayText.length > 120) {
-    errors.push('Device message must be 120 characters or fewer.');
-  }
-
   return errors;
 }
 
@@ -103,7 +98,6 @@ export default function Devices() {
   const [search, setSearch] = useState('');
   const [profile, setProfile] = useState<any>(null);
   const [transactionsMap, setTransactionsMap] = useState<any>({});
-  const [editingText, setEditingText] = useState<any>({});
   const [savingDeviceId, setSavingDeviceId] = useState<string | null>(null);
   const [savedDeviceId, setSavedDeviceId] = useState<string | null>(null);
   const [configErrors, setConfigErrors] = useState<Record<string, string[]>>({});
@@ -195,7 +189,6 @@ export default function Devices() {
           amount: cfg?.default_amount || 0,
 default_amount: cfg?.default_amount || 0,
 max_amount: cfg?.max_amount || 100,
-          display_text: cfg?.display_text || '',
           step: cfg?.step_amount || 5,
           preset_1: cfg?.preset_1 || 5,
           preset_2: cfg?.preset_2 || 10,
@@ -282,8 +275,7 @@ function updateLocalConfig(deviceId: string, values: any) {
 async function saveConfig(device: any) {
   setSavedDeviceId(null);
 
-  const displayText = editingText[device.id] ?? device.display_text;
-  const errors = getConfigErrors(device, displayText);
+  const errors = getConfigErrors(device);
   setConfigErrors(current => ({ ...current, [device.id]: errors }));
 
   if (errors.length) return;
@@ -291,7 +283,6 @@ async function saveConfig(device: any) {
   setSavingDeviceId(device.id);
 
   const values = {
-    display_text: displayText,
     default_amount: device.default_amount,
     max_amount: device.max_amount,
     preset_1: device.preset_1,
@@ -332,11 +323,6 @@ async function saveConfig(device: any) {
     return;
   }
 
-  setDevices(current => current.map(item =>
-    item.id === device.id
-      ? { ...item, display_text: editingText[device.id] ?? item.display_text }
-      : item
-  ));
   setSavingDeviceId(null);
   setSavedDeviceId(device.id);
   if (historyOpenDeviceId === device.id) await loadHistory(device.id);
@@ -388,22 +374,6 @@ async function saveConfig(device: any) {
                 <div className="text-sm text-gray-500">{d.merchant_name}</div>
               )}
             </div>
-
-            {/* MESSAGE */}
-            <input
-              type="text"
-              value={editingText[d.id] ?? d.display_text}
-              placeholder="Optional message"
-              onChange={(e) => {
-                setSavedDeviceId(null);
-                setConfigErrors(current => ({ ...current, [d.id]: [] }));
-                setEditingText({
-                  ...editingText,
-                  [d.id]: e.target.value
-                });
-              }}
-              className="w-full border px-3 py-2 rounded text-sm"
-            />
 
             {/* CONFIG ONLY */}
 

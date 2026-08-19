@@ -45,8 +45,6 @@ export async function POST(req: Request) {
       merchant_name: cfg.merchant_name || 'Merchant',
       plan,
 
-      display_text: cfg.display_text ?? '',
-
       enable_presets: planFeatures.enablePresets,
       enable_increment: planFeatures.enableIncrement,
       default_amount: cfg.default_amount ?? 0,
