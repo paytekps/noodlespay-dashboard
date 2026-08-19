@@ -21,7 +21,7 @@ const historyFieldLabels: Record<string, string> = {
   step_amount: 'Increment amount',
   enable_presets: 'Show presets',
   enable_increment: 'Show increment',
-  allow_reset: 'Show reset',
+  enable_reset: 'Show reset',
   reset_mode: 'Reset mode',
   reset_delay: 'Reset delay',
   plan: 'Plan'
@@ -87,7 +87,7 @@ function getConfigErrors(device: any, displayText: string) {
     }
   }
 
-  if (device.plan === 'premium' && device.allow_reset && device.reset_mode === 'auto' &&
+  if (device.plan === 'premium' && device.enable_reset && device.reset_mode === 'auto' &&
       (!Number.isInteger(device.reset_delay) || device.reset_delay < 1)) {
     errors.push('Auto-reset delay must be at least 1 second and use a whole number.');
   }
@@ -205,7 +205,7 @@ max_amount: cfg?.max_amount || 100,
           preset_3: cfg?.preset_3 || 20,
           enable_presets: cfg?.enable_presets ?? false,
           enable_increment: cfg?.enable_increment ?? false,
-          allow_reset: cfg?.allow_reset ?? false,
+          enable_reset: cfg?.enable_reset ?? false,
           reset_mode: cfg?.reset_mode || 'button',
           reset_delay: cfg?.reset_delay || 5,
           plan: cfg?.plan || 'basic'
@@ -303,10 +303,12 @@ async function saveConfig(device: any) {
     preset_2: device.preset_2,
     preset_3: device.preset_3,
     step_amount: device.step,
-    enable_presets: device.enable_presets,
-    enable_increment: device.enable_increment,
-    allow_reset: device.allow_reset,
-    reset_mode: device.reset_mode,
+    enable_presets: device.plan === 'premium' && device.enable_presets,
+    enable_increment: device.plan !== 'basic' && device.enable_increment,
+    enable_reset: device.plan !== 'basic' && device.enable_reset,
+    reset_mode: device.plan === 'basic'
+      ? 'none'
+      : device.plan === 'pro' ? 'button' : device.reset_mode,
     reset_delay: device.reset_delay
   };
 
@@ -523,23 +525,23 @@ async function saveConfig(device: any) {
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
-                  checked={d.allow_reset}
+                  checked={d.enable_reset}
                   onChange={(e) =>
-                    updateLocalConfig(d.id, { allow_reset: e.target.checked })
+                    updateLocalConfig(d.id, { enable_reset: e.target.checked })
                   }
                 />
                 Show Reset on Device
               </label>
             )}
 
-            {d.plan === 'pro' && d.allow_reset && (
+            {d.plan === 'pro' && d.enable_reset && (
               <div className="rounded-lg bg-gray-50 p-3 text-sm text-gray-600">
                 Pro uses manual reset. The button appears only after the amount changes.
               </div>
             )}
 
             {/* PREMIUM RESET MODE */}
-            {d.plan === 'premium' && d.allow_reset && (
+            {d.plan === 'premium' && d.enable_reset && (
               <div>
               <label className="block text-sm mb-1">Reset</label>
               <select
