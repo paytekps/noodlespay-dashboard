@@ -7,12 +7,14 @@ export function normalizeDevicePlan(value: unknown): DevicePlan {
 
 export function featuresForDevicePlan(
   plan: DevicePlan,
+  configuredPresets: unknown,
+  configuredIncrement: unknown,
   configuredResetMode: unknown
 ) {
   if (plan === 'premium') {
     return {
-      enablePresets: true,
-      enableIncrement: true,
+      enablePresets: configuredPresets === true,
+      enableIncrement: configuredIncrement === true,
       resetMode: configuredResetMode === 'auto' ? 'auto' : 'button'
     } as const;
   }
@@ -20,7 +22,7 @@ export function featuresForDevicePlan(
   if (plan === 'pro') {
     return {
       enablePresets: false,
-      enableIncrement: true,
+      enableIncrement: configuredIncrement === true,
       resetMode: 'button'
     } as const;
   }

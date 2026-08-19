@@ -49,7 +49,12 @@ export async function POST(req: Request) {
 
     const cfg = config || {};
     const plan = normalizeDevicePlan(cfg.plan);
-    const planFeatures = featuresForDevicePlan(plan, cfg.reset_mode);
+    const planFeatures = featuresForDevicePlan(
+      plan,
+      cfg.enable_presets,
+      cfg.enable_increment,
+      cfg.reset_mode
+    );
 
     // ✅ RESPONSE
     return NextResponse.json({
