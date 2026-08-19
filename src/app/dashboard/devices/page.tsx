@@ -11,6 +11,8 @@ export default function Devices() {
   const [profile, setProfile] = useState<any>(null);
   const [transactionsMap, setTransactionsMap] = useState<any>({});
   const [editingText, setEditingText] = useState<any>({});
+  const [savingDeviceId, setSavingDeviceId] = useState<string | null>(null);
+  const [savedDeviceId, setSavedDeviceId] = useState<string | null>(null);
 
   useEffect(() => {
     loadProfile();
@@ -103,7 +105,8 @@ max_amount: cfg?.max_amount || 100,
           enable_presets: cfg?.enable_presets ?? false,
           enable_increment: cfg?.enable_increment ?? false,
           reset_mode: cfg?.reset_mode || 'button',
-          reset_delay: cfg?.reset_delay || 5
+          reset_delay: cfg?.reset_delay || 5,
+          plan: cfg?.plan || 'basic'
         };
       })
     );
@@ -134,13 +137,33 @@ max_amount: cfg?.max_amount || 100,
   const totalTransactions = allTransactions.length;
   const avgTransaction = totalTransactions ? Math.round(totalVolume / totalTransactions) : 0;
 
-async function updateConfig(deviceId: string, values: any) {
+function updateLocalConfig(deviceId: string, values: any) {
+  setSavedDeviceId(null);
+  setDevices(current => current.map(device =>
+    device.id === deviceId ? { ...device, ...values } : device
+  ));
+}
+
+async function saveConfig(device: any) {
+  setSavingDeviceId(device.id);
+  setSavedDeviceId(null);
+
   const { error } = await supabase
     .from('device_config')
     .upsert(
       {
-        device_id: deviceId,
-        ...values
+        device_id: device.id,
+        display_text: editingText[device.id] ?? device.display_text,
+        default_amount: device.default_amount,
+        max_amount: device.max_amount,
+        preset_1: device.preset_1,
+        preset_2: device.preset_2,
+        preset_3: device.preset_3,
+        step_amount: device.step,
+        enable_presets: device.enable_presets,
+        enable_increment: device.enable_increment,
+        reset_mode: device.reset_mode,
+        reset_delay: device.reset_delay
       },
       {
         onConflict: 'device_id'
@@ -150,21 +173,17 @@ async function updateConfig(deviceId: string, values: any) {
   if (error) {
     console.error('Config update failed:', error);
     alert(`Config update failed: ${error.message}`);
+    setSavingDeviceId(null);
     return;
   }
 
-  loadDevices();
-}
-
-  async function saveDisplayText(deviceId: string) {
-    const value = editingText[deviceId];
-
-    await supabase
-      .from('device_config')
-      .update({ display_text: value })
-      .eq('device_id', deviceId);
-
-    loadDevices();
+  setDevices(current => current.map(item =>
+    item.id === device.id
+      ? { ...item, display_text: editingText[device.id] ?? item.display_text }
+      : item
+  ));
+  setSavingDeviceId(null);
+  setSavedDeviceId(device.id);
   }
 
   return (
@@ -214,13 +233,13 @@ async function updateConfig(deviceId: string, values: any) {
               type="text"
               value={editingText[d.id] ?? d.display_text}
               placeholder="Optional message"
-              onChange={(e) =>
+              onChange={(e) => {
+                setSavedDeviceId(null);
                 setEditingText({
                   ...editingText,
                   [d.id]: e.target.value
-                })
-              }
-              onBlur={() => saveDisplayText(d.id)}
+                });
+              }}
               className="w-full border px-3 py-2 rounded text-sm"
             />
 
@@ -236,7 +255,7 @@ async function updateConfig(deviceId: string, values: any) {
     type="number"
     value={d.default_amount}
     onChange={(e) =>
-      updateConfig(d.id, {
+      updateLocalConfig(d.id, {
         default_amount: Number(e.target.value)
       })
     }
@@ -251,7 +270,7 @@ async function updateConfig(deviceId: string, values: any) {
                   type="checkbox"
                   checked={d.enable_presets}
                   onChange={(e) =>
-                    updateConfig(d.id, { enable_presets: e.target.checked })
+                    updateLocalConfig(d.id, { enable_presets: e.target.checked })
                   }
                 />
                 Show Presets on Device
@@ -265,7 +284,7 @@ async function updateConfig(deviceId: string, values: any) {
                       type="number"
                       value={d[`preset_${i}`]}
                       onChange={(e) =>
-                        updateConfig(d.id, {
+                        updateLocalConfig(d.id, {
                           [`preset_${i}`]: Number(e.target.value)
                         })
                       }
@@ -283,7 +302,7 @@ async function updateConfig(deviceId: string, values: any) {
                   type="checkbox"
                   checked={d.enable_increment}
                   onChange={(e) =>
-                    updateConfig(d.id, { enable_increment: e.target.checked })
+                    updateLocalConfig(d.id, { enable_increment: e.target.checked })
                   }
                 />
                 Show Increment on Device
@@ -294,8 +313,8 @@ async function updateConfig(deviceId: string, values: any) {
                   type="number"
                   value={d.step}
                   onChange={(e) =>
-                    updateConfig(d.id, {
-                      step_amount: Number(e.target.value)
+                    updateLocalConfig(d.id, {
+                      step: Number(e.target.value)
                     })
                   }
                   className="border px-2 py-1 rounded w-full mt-2"
@@ -312,7 +331,7 @@ async function updateConfig(deviceId: string, values: any) {
     type="number"
     value={d.max_amount}
     onChange={(e) =>
-      updateConfig(d.id, {
+      updateLocalConfig(d.id, {
         max_amount: Number(e.target.value)
       })
     }
@@ -324,7 +343,7 @@ async function updateConfig(deviceId: string, values: any) {
               <select
                 value={d.reset_mode}
                 onChange={(e) =>
-                  updateConfig(d.id, { reset_mode: e.target.value })
+                  updateLocalConfig(d.id, { reset_mode: e.target.value })
                 }
                 className="border px-3 py-2 rounded w-full"
               >
@@ -337,12 +356,27 @@ async function updateConfig(deviceId: string, values: any) {
                   type="number"
                   value={d.reset_delay}
                   onChange={(e) =>
-                    updateConfig(d.id, {
+                    updateLocalConfig(d.id, {
                       reset_delay: Number(e.target.value)
                     })
                   }
                   className="border px-2 py-1 rounded w-full mt-2"
                 />
+              )}
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                onClick={() => saveConfig(d)}
+                disabled={savingDeviceId === d.id}
+                className="bg-blue-600 text-white px-5 py-2 rounded disabled:opacity-60"
+              >
+                {savingDeviceId === d.id ? 'Saving...' : 'Save Changes'}
+              </button>
+              {savedDeviceId === d.id && (
+                <span className="text-sm text-green-600">
+                  Saved — device will update automatically
+                </span>
               )}
             </div>
 

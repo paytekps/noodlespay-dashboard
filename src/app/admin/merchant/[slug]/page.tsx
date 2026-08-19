@@ -13,6 +13,8 @@ export default function MerchantPage() {
   const [role, setRole] = useState<string>('admin');
   const [newDeviceName, setNewDeviceName] = useState('');
 const [serialNumber, setSerialNumber] = useState('');
+  const [savingDeviceId, setSavingDeviceId] = useState<string | null>(null);
+  const [savedDeviceId, setSavedDeviceId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!slug) return;
@@ -97,6 +99,8 @@ setSerialNumber('');
   }
 
 async function updateConfig(deviceId: string, values: any) {
+  setSavingDeviceId(deviceId);
+  setSavedDeviceId(null);
   const { data: existing, error: lookupError } = await supabase
     .from('device_config')
     .select('id')
@@ -105,6 +109,7 @@ async function updateConfig(deviceId: string, values: any) {
 
   if (lookupError) {
     alert(`Plan lookup failed: ${lookupError.message}`);
+    setSavingDeviceId(null);
     return;
   }
 
@@ -122,11 +127,20 @@ async function updateConfig(deviceId: string, values: any) {
 
   if (result.error) {
     alert(`Plan update failed: ${result.error.message}`);
+    setSavingDeviceId(null);
     return;
   }
 
-  loadData();
+  setSavingDeviceId(null);
+  setSavedDeviceId(deviceId);
 }
+
+  function updateLocalPlan(deviceId: string, plan: string) {
+    setSavedDeviceId(null);
+    setDevices(current => current.map(device =>
+      device.id === deviceId ? { ...device, plan } : device
+    ));
+  }
   const canChangePlan = role === 'admin';
 
   if (!merchant) {
@@ -184,10 +198,7 @@ async function updateConfig(deviceId: string, values: any) {
             <select
               disabled={!canChangePlan}
               value={d.plan}
-              onChange={(e) => {
-                const plan = e.target.value;
-                updateConfig(d.id, applyPlan(plan));
-              }}
+              onChange={(e) => updateLocalPlan(d.id, e.target.value)}
               className="border px-3 py-2 rounded mt-2"
             >
               <option value="basic">Basic</option>
@@ -228,6 +239,23 @@ async function updateConfig(deviceId: string, values: any) {
                 </div>
               )}
             </div>
+
+            {canChangePlan && (
+              <div className="flex items-center gap-3 mt-4">
+                <button
+                  onClick={() => updateConfig(d.id, applyPlan(d.plan))}
+                  disabled={savingDeviceId === d.id}
+                  className="bg-blue-600 text-white px-5 py-2 rounded disabled:opacity-60"
+                >
+                  {savingDeviceId === d.id ? 'Saving...' : 'Save Plan'}
+                </button>
+                {savedDeviceId === d.id && (
+                  <span className="text-sm text-green-600">
+                    Saved — device will update automatically
+                  </span>
+                )}
+              </div>
+            )}
 
           </div>
 
