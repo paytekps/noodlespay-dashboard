@@ -18,36 +18,18 @@ export async function POST(req: Request) {
       );
     }
 
-    // ✅ find device
-    const { data: device, error: deviceError } = await supabase
-      .from('devices')
-      .select('*')
-      .eq('serial_number', serial_number)
-      .single();
+    const { data: bootstrap, error: bootstrapError } = await supabase
+      .rpc('get_device_bootstrap', { p_serial_number: serial_number });
 
-    if (deviceError || !device) {
-      console.error('Device lookup failed:', deviceError);
+    if (bootstrapError || !bootstrap) {
+      console.error('Device lookup failed:', bootstrapError);
       return NextResponse.json(
         { error: 'Device not found' },
         { status: 404 }
       );
     }
 
-    // ✅ fetch merchant
-    const { data: merchant } = await supabase
-      .from('merchants')
-      .select('name')
-      .eq('id', device.merchant_id)
-      .single();
-
-    // ✅ get config (SAFE VERSION)
-    const { data: config } = await supabase
-      .from('device_config')
-      .select('*')
-      .eq('device_id', device.id)
-      .maybeSingle(); // ✅ IMPORTANT FIX
-
-    const cfg = config || {};
+    const cfg = bootstrap as Record<string, any>;
     const plan = normalizeDevicePlan(cfg.plan);
     const planFeatures = featuresForDevicePlan(
       plan,
@@ -58,10 +40,10 @@ export async function POST(req: Request) {
 
     // ✅ RESPONSE
     return NextResponse.json({
-      device_id: device.id,
-      merchant_id: device.merchant_id,
+      device_id: cfg.device_id,
+      merchant_id: cfg.merchant_id,
 
-      merchant_name: merchant?.name || 'Merchant',
+      merchant_name: cfg.merchant_name || 'Merchant',
       plan,
 
       display_text: cfg.display_text ?? '',
