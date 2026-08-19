@@ -9,13 +9,19 @@ export function featuresForDevicePlan(
   plan: DevicePlan,
   configuredPresets: unknown,
   configuredIncrement: unknown,
+  configuredReset: unknown,
   configuredResetMode: unknown
 ) {
+  const enableReset = configuredReset === true;
+
   if (plan === 'premium') {
     return {
       enablePresets: configuredPresets === true,
       enableIncrement: configuredIncrement === true,
-      resetMode: configuredResetMode === 'auto' ? 'auto' : 'button'
+      enableReset,
+      resetMode: enableReset
+        ? configuredResetMode === 'auto' ? 'auto' : 'button'
+        : 'none'
     } as const;
   }
 
@@ -23,13 +29,15 @@ export function featuresForDevicePlan(
     return {
       enablePresets: false,
       enableIncrement: configuredIncrement === true,
-      resetMode: 'button'
+      enableReset,
+      resetMode: enableReset ? 'button' : 'none'
     } as const;
   }
 
   return {
     enablePresets: false,
     enableIncrement: false,
+    enableReset: false,
     resetMode: 'none'
   } as const;
 }

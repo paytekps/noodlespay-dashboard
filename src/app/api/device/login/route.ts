@@ -35,6 +35,7 @@ export async function POST(req: Request) {
       plan,
       cfg.enable_presets,
       cfg.enable_increment,
+      cfg.enable_reset,
       cfg.reset_mode
     );
 
@@ -50,6 +51,7 @@ export async function POST(req: Request) {
 
       enable_presets: planFeatures.enablePresets,
       enable_increment: planFeatures.enableIncrement,
+      enable_reset: planFeatures.enableReset,
 
       default_amount: cfg.default_amount ?? 0,
       step_amount: cfg.step_amount ?? 5,

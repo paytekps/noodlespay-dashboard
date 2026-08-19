@@ -534,28 +534,29 @@ async function saveConfig(device: any) {
               </label>
             )}
 
-            {d.plan === 'pro' && d.enable_reset && (
+            {d.plan === 'pro' && (
               <div className="rounded-lg bg-gray-50 p-3 text-sm text-gray-600">
-                Pro uses manual reset. The button appears only after the amount changes.
+                Pro uses manual reset. Turn on “Show Reset on Device” above; the button then appears only after the amount changes.
               </div>
             )}
 
             {/* PREMIUM RESET MODE */}
-            {d.plan === 'premium' && d.enable_reset && (
+            {d.plan === 'premium' && (
               <div>
               <label className="block text-sm mb-1">Reset</label>
               <select
                 value={d.reset_mode}
+                disabled={!d.enable_reset}
                 onChange={(e) =>
                   updateLocalConfig(d.id, { reset_mode: e.target.value })
                 }
-                className="border px-3 py-2 rounded w-full"
+                className="border px-3 py-2 rounded w-full disabled:bg-gray-100 disabled:text-gray-500"
               >
                 <option value="button">Manual Reset</option>
                 <option value="auto">Auto Reset</option>
               </select>
 
-              {d.reset_mode === 'auto' && (
+              {d.enable_reset && d.reset_mode === 'auto' && (
                 <input
                   type="number"
                   value={d.reset_delay}
