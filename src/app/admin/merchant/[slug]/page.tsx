@@ -4,6 +4,16 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../../../../lib/supabase';
 import { useParams } from 'next/navigation';
 
+type ClosedLoopCard = {
+  slot: number;
+  name: string;
+  bin_prefix: string;
+  enabled: boolean;
+};
+
+const emptyClosedLoopCards = (): ClosedLoopCard[] =>
+  [1, 2, 3, 4].map(slot => ({ slot, name: '', bin_prefix: '', enabled: false }));
+
 export default function MerchantPage() {
   const params = useParams();
   const slug = params?.slug as string;
@@ -15,6 +25,9 @@ export default function MerchantPage() {
 const [serialNumber, setSerialNumber] = useState('');
   const [savingDeviceId, setSavingDeviceId] = useState<string | null>(null);
   const [savedDeviceId, setSavedDeviceId] = useState<string | null>(null);
+  const [closedLoopCards, setClosedLoopCards] = useState<ClosedLoopCard[]>(emptyClosedLoopCards);
+  const [savingCards, setSavingCards] = useState(false);
+  const [cardsSaved, setCardsSaved] = useState(false);
 
   useEffect(() => {
     if (!slug) return;
@@ -46,6 +59,19 @@ const [serialNumber, setSerialNumber] = useState('');
 
     if (!merchantData) return;
     setMerchant(merchantData);
+
+    const { data: configuredCards } = await supabase
+      .from('closed_loop_cards')
+      .select('slot, name, bin_prefix, enabled')
+      .eq('merchant_id', merchantData.id)
+      .order('slot');
+
+    setClosedLoopCards(emptyClosedLoopCards().map(empty => {
+      const configured = (configuredCards || []).find(card => card.slot === empty.slot);
+      return configured
+        ? { ...empty, ...configured, bin_prefix: configured.bin_prefix || '' }
+        : empty;
+    }));
 
     const { data: devicesData } = await supabase
       .from('devices')
@@ -141,6 +167,55 @@ async function updateConfig(deviceId: string, values: any) {
       device.id === deviceId ? { ...device, plan } : device
     ));
   }
+
+  function updateClosedLoopCard(slot: number, values: Partial<ClosedLoopCard>) {
+    setCardsSaved(false);
+    setClosedLoopCards(cards => cards.map(card =>
+      card.slot === slot ? { ...card, ...values } : card
+    ));
+  }
+
+  async function saveClosedLoopCards() {
+    if (!merchant || !canChangePlan) return;
+
+    const configuredCards = closedLoopCards.filter(card =>
+      card.name.trim() || card.bin_prefix.trim() || card.enabled
+    );
+    const invalid = configuredCards.find(card =>
+      !card.name.trim()
+      || !/^\d{6,8}$/.test(card.bin_prefix)
+    );
+    if (invalid) {
+      alert(`Card ${invalid.slot} needs a name and a 6–8 digit BIN before it can be saved.`);
+      return;
+    }
+    if (configuredCards.length === 0) {
+      setCardsSaved(true);
+      return;
+    }
+
+    setSavingCards(true);
+    setCardsSaved(false);
+    const { error } = await supabase
+      .from('closed_loop_cards')
+      .upsert(
+        configuredCards.map(card => ({
+          merchant_id: merchant.id,
+          slot: card.slot,
+          name: card.name.trim(),
+          bin_prefix: card.bin_prefix,
+          enabled: card.enabled
+        })),
+        { onConflict: 'merchant_id,slot' }
+      );
+    setSavingCards(false);
+
+    if (error) {
+      alert(`Closed-loop cards could not be saved: ${error.message}`);
+      return;
+    }
+    setCardsSaved(true);
+  }
   const canChangePlan = role === 'admin';
 
   if (!merchant) {
@@ -180,6 +255,57 @@ async function updateConfig(deviceId: string, values: any) {
           Add Device
         </button>
       </div>
+
+      {canChangePlan && (
+        <div className="bg-white p-5 rounded-xl border mb-6">
+          <h2 className="font-semibold text-lg">Closed-loop cards</h2>
+          <p className="text-sm text-gray-600 mt-1 mb-4">
+            Four card programs can be prepared here. Leave them disabled until Datecs confirms the BIN values.
+          </p>
+          <div className="space-y-3">
+            {closedLoopCards.map(card => (
+              <div key={card.slot} className="grid grid-cols-[4rem_1fr_10rem_auto] gap-3 items-center">
+                <span className="text-sm">Card {card.slot}</span>
+                <input
+                  aria-label={`Card ${card.slot} name`}
+                  placeholder="Program name"
+                  value={card.name}
+                  onChange={event => updateClosedLoopCard(card.slot, { name: event.target.value })}
+                  className="border px-3 py-2 rounded"
+                />
+                <input
+                  aria-label={`Card ${card.slot} BIN`}
+                  inputMode="numeric"
+                  placeholder="6–8 digit BIN"
+                  value={card.bin_prefix}
+                  onChange={event => updateClosedLoopCard(card.slot, {
+                    bin_prefix: event.target.value.replace(/\D/g, '').slice(0, 8)
+                  })}
+                  className="border px-3 py-2 rounded"
+                />
+                <label className="flex gap-2 items-center text-sm">
+                  <input
+                    type="checkbox"
+                    checked={card.enabled}
+                    onChange={event => updateClosedLoopCard(card.slot, { enabled: event.target.checked })}
+                  />
+                  Enabled
+                </label>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-3 mt-4">
+            <button
+              onClick={saveClosedLoopCards}
+              disabled={savingCards}
+              className="bg-blue-600 text-white px-5 py-2 rounded disabled:opacity-60"
+            >
+              {savingCards ? 'Saving...' : 'Save Card Programs'}
+            </button>
+            {cardsSaved && <span className="text-sm text-green-600">Saved</span>}
+          </div>
+        </div>
+      )}
 
       <div className="space-y-6">
         {devices.map((d) => (
