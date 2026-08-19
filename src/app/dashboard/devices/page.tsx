@@ -148,27 +148,41 @@ async function saveConfig(device: any) {
   setSavingDeviceId(device.id);
   setSavedDeviceId(null);
 
-  const { error } = await supabase
+  const values = {
+    display_text: editingText[device.id] ?? device.display_text,
+    default_amount: device.default_amount,
+    max_amount: device.max_amount,
+    preset_1: device.preset_1,
+    preset_2: device.preset_2,
+    preset_3: device.preset_3,
+    step_amount: device.step,
+    enable_presets: device.enable_presets,
+    enable_increment: device.enable_increment,
+    reset_mode: device.reset_mode,
+    reset_delay: device.reset_delay
+  };
+
+  const { data: existing, error: lookupError } = await supabase
     .from('device_config')
-    .upsert(
-      {
-        device_id: device.id,
-        display_text: editingText[device.id] ?? device.display_text,
-        default_amount: device.default_amount,
-        max_amount: device.max_amount,
-        preset_1: device.preset_1,
-        preset_2: device.preset_2,
-        preset_3: device.preset_3,
-        step_amount: device.step,
-        enable_presets: device.enable_presets,
-        enable_increment: device.enable_increment,
-        reset_mode: device.reset_mode,
-        reset_delay: device.reset_delay
-      },
-      {
-        onConflict: 'device_id'
-      }
-    );
+    .select('id')
+    .eq('device_id', device.id)
+    .maybeSingle();
+
+  if (lookupError) {
+    console.error('Config lookup failed:', lookupError);
+    alert(`Config lookup failed: ${lookupError.message}`);
+    setSavingDeviceId(null);
+    return;
+  }
+
+  const { error } = existing
+    ? await supabase
+        .from('device_config')
+        .update(values)
+        .eq('id', existing.id)
+    : await supabase
+        .from('device_config')
+        .insert({ device_id: device.id, ...values });
   
   if (error) {
     console.error('Config update failed:', error);
