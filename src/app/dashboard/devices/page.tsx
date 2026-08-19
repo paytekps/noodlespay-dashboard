@@ -3,6 +3,49 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../../lib/supabase';
 
+type ConfigHistoryEntry = {
+  id: number;
+  changed_at: string;
+  changed_by_role: string;
+  action: 'baseline' | 'created' | 'updated';
+  changes: Record<string, { before: unknown; after: unknown }>;
+};
+
+const historyFieldLabels: Record<string, string> = {
+  display_text: 'Device message',
+  default_amount: 'Default amount',
+  max_amount: 'Maximum amount',
+  preset_1: 'Preset 1',
+  preset_2: 'Preset 2',
+  preset_3: 'Preset 3',
+  step_amount: 'Increment amount',
+  enable_presets: 'Show presets',
+  enable_increment: 'Show increment',
+  reset_mode: 'Reset mode',
+  reset_delay: 'Reset delay',
+  plan: 'Plan'
+};
+
+const moneyHistoryFields = new Set([
+  'default_amount', 'max_amount', 'preset_1', 'preset_2', 'preset_3', 'step_amount'
+]);
+
+function formatHistoryValue(field: string, value: unknown) {
+  if (value === null || value === undefined || value === '') return 'Not set';
+  if (typeof value === 'boolean') return value ? 'Shown' : 'Hidden';
+  if (moneyHistoryFields.has(field)) return `$${Number(value).toLocaleString()}`;
+  if (field === 'reset_delay') return `${value} seconds`;
+  if (field === 'reset_mode') return value === 'auto' ? 'Auto reset' : 'Manual reset';
+  return String(value);
+}
+
+function formatHistoryActor(role: string) {
+  if (role === 'admin' || role === 'super_admin') return 'Administrator';
+  if (role === 'sales_rep') return 'Sales representative';
+  if (role === 'merchant') return 'Merchant';
+  return 'System';
+}
+
 function getConfigErrors(device: any, displayText: string) {
   const errors: string[] = [];
   const isPositiveAmount = (value: number) => Number.isFinite(value) && value > 0;
@@ -66,6 +109,10 @@ export default function Devices() {
   const [savingDeviceId, setSavingDeviceId] = useState<string | null>(null);
   const [savedDeviceId, setSavedDeviceId] = useState<string | null>(null);
   const [configErrors, setConfigErrors] = useState<Record<string, string[]>>({});
+  const [historyOpenDeviceId, setHistoryOpenDeviceId] = useState<string | null>(null);
+  const [historyLoadingDeviceId, setHistoryLoadingDeviceId] = useState<string | null>(null);
+  const [historyByDevice, setHistoryByDevice] = useState<Record<string, ConfigHistoryEntry[]>>({});
+  const [historyErrors, setHistoryErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     loadProfile();
@@ -185,6 +232,43 @@ max_amount: cfg?.max_amount || 100,
     setTransactionsMap(map);
   }
 
+  async function loadHistory(deviceId: string) {
+    setHistoryLoadingDeviceId(deviceId);
+    setHistoryErrors(current => ({ ...current, [deviceId]: '' }));
+
+    const { data, error } = await supabase
+      .from('device_config_history')
+      .select('id, changed_at, changed_by_role, action, changes')
+      .eq('device_id', deviceId)
+      .order('changed_at', { ascending: false })
+      .limit(25);
+
+    if (error) {
+      console.error('Settings history lookup failed:', error);
+      setHistoryErrors(current => ({
+        ...current,
+        [deviceId]: 'Settings history could not be loaded.'
+      }));
+    } else {
+      setHistoryByDevice(current => ({
+        ...current,
+        [deviceId]: (data || []) as ConfigHistoryEntry[]
+      }));
+    }
+
+    setHistoryLoadingDeviceId(null);
+  }
+
+  async function toggleHistory(deviceId: string) {
+    if (historyOpenDeviceId === deviceId) {
+      setHistoryOpenDeviceId(null);
+      return;
+    }
+
+    setHistoryOpenDeviceId(deviceId);
+    await loadHistory(deviceId);
+  }
+
   const allTransactions = Object.values(transactionsMap).flat() as any[];
   const totalVolume = allTransactions.reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
   const totalTransactions = allTransactions.length;
@@ -259,6 +343,7 @@ async function saveConfig(device: any) {
   ));
   setSavingDeviceId(null);
   setSavedDeviceId(device.id);
+  if (historyOpenDeviceId === device.id) await loadHistory(device.id);
   }
 
   return (
@@ -488,6 +573,61 @@ async function saveConfig(device: any) {
                 <span className="text-sm text-green-600">
                   Saved — device will update automatically
                 </span>
+              )}
+            </div>
+
+            <div className="border-t pt-4">
+              <button
+                type="button"
+                onClick={() => toggleHistory(d.id)}
+                className="text-sm font-semibold text-blue-700 hover:underline"
+              >
+                {historyOpenDeviceId === d.id ? 'Hide Change History' : 'View Change History'}
+              </button>
+
+              {historyOpenDeviceId === d.id && (
+                <div className="mt-3 rounded-lg bg-gray-50 p-4">
+                  {historyLoadingDeviceId === d.id && (
+                    <div className="text-sm text-gray-500">Loading change history...</div>
+                  )}
+
+                  {historyErrors[d.id] && (
+                    <div className="text-sm text-red-700" role="alert">{historyErrors[d.id]}</div>
+                  )}
+
+                  {historyLoadingDeviceId !== d.id && !historyErrors[d.id] &&
+                    (historyByDevice[d.id]?.length || 0) === 0 && (
+                    <div className="text-sm text-gray-500">No settings changes have been recorded yet.</div>
+                  )}
+
+                  <div className="space-y-3">
+                    {(historyByDevice[d.id] || []).map(entry => (
+                      <div key={entry.id} className="rounded border bg-white p-3 text-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-semibold">
+                            {entry.action === 'baseline' ? 'Initial settings recorded' : `Changed by ${formatHistoryActor(entry.changed_by_role)}`}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {new Date(entry.changed_at).toLocaleString()}
+                          </span>
+                        </div>
+
+                        {entry.action !== 'baseline' && (
+                          <div className="mt-2 space-y-1 text-gray-700">
+                            {Object.entries(entry.changes)
+                              .filter(([field]) => historyFieldLabels[field])
+                              .map(([field, change]) => (
+                                <div key={field}>
+                                  <span className="font-medium">{historyFieldLabels[field]}:</span>{' '}
+                                  {formatHistoryValue(field, change.before)} → {formatHistoryValue(field, change.after)}
+                                </div>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
 
