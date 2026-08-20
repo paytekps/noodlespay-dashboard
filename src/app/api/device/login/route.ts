@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import { supabase } from '../../../../lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import {
   featuresForDevicePlan,
   normalizeDevicePlan
@@ -9,6 +9,16 @@ import {
 
 export async function POST(req: Request) {
   try {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !serviceKey) {
+      console.error('Device login is missing its server-side Supabase configuration.');
+      return NextResponse.json({ error: 'Server configuration error' }, { status: 503 });
+    }
+
+    const supabase = createClient(url, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    });
     const { serial_number } = await req.json();
 
     if (!serial_number) {

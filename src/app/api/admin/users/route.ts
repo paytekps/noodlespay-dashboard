@@ -36,13 +36,80 @@ async function ownerContext(req: Request) {
 }
 
 async function listUsers(admin: SupabaseClient) {
-  const [{ data: profiles, error }, { data: merchants }] = await Promise.all([
+  const [
+    { data: profiles, error },
+    { data: merchants },
+    { data: salesReps },
+    { data: assignments }
+  ] = await Promise.all([
     admin.from('profiles').select('id, email, full_name, role, merchant_id').order('created_at'),
-    admin.from('merchants').select('id, name').order('name')
+    admin.from('merchants').select('id, name').order('name'),
+    admin.from('sales_reps').select('id, user_id'),
+    admin.from('sales_rep_merchants').select('sales_rep_id, merchant_id')
   ]);
 
   if (error) throw error;
-  return { users: profiles ?? [], merchants: merchants ?? [] };
+  const repByUser = new Map((salesReps ?? []).map((rep) => [rep.user_id, rep.id]));
+  const merchantsByRep = new Map<string, string[]>();
+  for (const assignment of assignments ?? []) {
+    const current = merchantsByRep.get(assignment.sales_rep_id) ?? [];
+    current.push(assignment.merchant_id);
+    merchantsByRep.set(assignment.sales_rep_id, current);
+  }
+
+  const users = (profiles ?? []).map((profile) => {
+    const repId = repByUser.get(profile.id);
+    return {
+      ...profile,
+      assigned_merchant_ids: repId ? merchantsByRep.get(repId) ?? [] : []
+    };
+  });
+
+  return { users, merchants: merchants ?? [] };
+}
+
+async function syncSalesAccess(
+  admin: SupabaseClient,
+  user: { id: string; email: string | null; fullName?: string | null },
+  role: ManagedRole,
+  merchantIds: string[]
+) {
+  const { data: existingRep, error: lookupError } = await admin
+    .from('sales_reps')
+    .select('id')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (lookupError) throw lookupError;
+
+  let repId = existingRep?.id;
+  if (role === 'sales_rep' && !repId) {
+    const { data: createdRep, error: createError } = await admin
+      .from('sales_reps')
+      .insert({ user_id: user.id, email: user.email, name: user.fullName || user.email })
+      .select('id')
+      .single();
+    if (createError) throw createError;
+    repId = createdRep.id;
+  }
+
+  if (!repId) return;
+  const { error: clearError } = await admin
+    .from('sales_rep_merchants')
+    .delete()
+    .eq('sales_rep_id', repId);
+  if (clearError) throw clearError;
+
+  if (role === 'sales_rep' && merchantIds.length) {
+    const { error: assignError } = await admin
+      .from('sales_rep_merchants')
+      .insert(merchantIds.map((merchantId) => ({ sales_rep_id: repId, merchant_id: merchantId })));
+    if (assignError) throw assignError;
+  }
+}
+
+function requestedMerchantIds(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter((id): id is string => typeof id === 'string' && id.length > 0))];
 }
 
 export async function GET(req: Request) {
@@ -70,6 +137,7 @@ export async function POST(req: Request) {
   const fullName = typeof body.fullName === 'string' ? body.fullName.trim().slice(0, 120) : '';
   const role = body.role;
   const merchantId = typeof body.merchantId === 'string' && body.merchantId ? body.merchantId : null;
+  const merchantIds = requestedMerchantIds(body.merchantIds);
 
   if (!email || !email.includes('@')) {
     return NextResponse.json({ error: 'Enter a valid email address.' }, { status: 400 });
@@ -110,6 +178,13 @@ export async function POST(req: Request) {
     console.error('Invited user metadata sync failed:', metadataError);
   }
 
+  try {
+    await syncSalesAccess(context.admin, { id: invitation.user.id, email, fullName }, role, merchantIds);
+  } catch (salesError) {
+    console.error('Invited sales access sync failed:', salesError);
+    return NextResponse.json({ error: 'The account was created, but its sales assignments could not be saved.' }, { status: 500 });
+  }
+
   return NextResponse.json({ ...(await listUsers(context.admin)), currentUserId: context.userId });
 }
 
@@ -123,6 +198,7 @@ export async function PATCH(req: Request) {
   const userId = typeof body.userId === 'string' ? body.userId : '';
   const role = body.role;
   const merchantId = typeof body.merchantId === 'string' && body.merchantId ? body.merchantId : null;
+  const merchantIds = requestedMerchantIds(body.merchantIds);
 
   if (!userId || !isManagedRole(role)) {
     return NextResponse.json({ error: 'Invalid user or role.' }, { status: 400 });
@@ -172,6 +248,23 @@ export async function PATCH(req: Request) {
       .update({ role: previous.role, merchant_id: previous.merchant_id })
       .eq('id', userId);
     return NextResponse.json({ error: 'Auth permissions could not be updated.' }, { status: 500 });
+  }
+
+  try {
+    const { data: targetProfile } = await context.admin
+      .from('profiles')
+      .select('email, full_name')
+      .eq('id', userId)
+      .single();
+    await syncSalesAccess(
+      context.admin,
+      { id: userId, email: targetProfile?.email ?? null, fullName: targetProfile?.full_name ?? null },
+      role,
+      merchantIds
+    );
+  } catch (salesError) {
+    console.error('Sales access sync failed:', salesError);
+    return NextResponse.json({ error: 'The role was saved, but sales assignments could not be updated.' }, { status: 500 });
   }
 
   return NextResponse.json({ ...(await listUsers(context.admin)), currentUserId: context.userId });
