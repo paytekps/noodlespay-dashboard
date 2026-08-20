@@ -1,5 +1,6 @@
-import Link from 'next/link';
+import InquiryForm from '../../components/public/inquiry-form';
 
-export default function SignupPage() {
-  return <main className="mx-auto max-w-3xl px-6 py-20"><div className="rounded-2xl border bg-white p-8 shadow-sm"><p className="text-sm font-bold uppercase tracking-widest text-emerald-700">Get started</p><h1 className="mt-3 text-4xl font-black">Set up your Gimml organization</h1><p className="mt-4 leading-7 text-gray-600">Online account creation and device checkout are being connected to secure payment and fulfillment. Until final pricing and shipping rules are entered, we will not collect payment or create an incomplete merchant account.</p><div className="mt-8 flex flex-wrap gap-3"><Link href="/contact" className="rounded-lg bg-gray-950 px-5 py-3 font-bold text-white">Contact us to get started</Link><Link href="/pricing" className="rounded-lg border px-5 py-3 font-bold">Review plans</Link></div></div></main>;
+export default async function SignupPage({ searchParams }: { searchParams: Promise<{ plan?: string }> }) {
+  const { plan } = await searchParams;
+  return <main className="mx-auto max-w-3xl px-6 py-20"><div className="mb-8"><p className="text-sm font-bold uppercase tracking-widest text-emerald-700">Get started</p><h1 className="mt-3 text-4xl font-black">Request Gimml devices</h1><p className="mt-4 leading-7 text-gray-600">Choose your plan and tell us where the devices will be used. Your request will be saved for the Gimml team. Secure checkout will open automatically after approved pricing is connected.</p></div><InquiryForm kind="order_request" defaultPlan={plan} /></main>;
 }

@@ -2,7 +2,7 @@ export const userRoles = ['super_admin', 'admin', 'sales_rep', 'merchant'] as co
 
 export type UserRole = typeof userRoles[number];
 
-const publicPaths = new Set(['/', '/login', '/how-it-works', '/pricing', '/signup', '/contact']);
+const publicPaths = new Set(['/', '/login', '/how-it-works', '/pricing', '/signup', '/contact', '/order/success']);
 
 export function isPublicPath(pathname: string) {
   return publicPaths.has(pathname) || pathname.startsWith('/device/');
