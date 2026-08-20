@@ -2,6 +2,12 @@ export const userRoles = ['super_admin', 'admin', 'sales_rep', 'merchant'] as co
 
 export type UserRole = typeof userRoles[number];
 
+const publicPaths = new Set(['/', '/login', '/how-it-works', '/pricing', '/signup', '/contact']);
+
+export function isPublicPath(pathname: string) {
+  return publicPaths.has(pathname) || pathname.startsWith('/device/');
+}
+
 export function isUserRole(value: unknown): value is UserRole {
   return typeof value === 'string' && userRoles.includes(value as UserRole);
 }
@@ -13,7 +19,7 @@ export function landingPageForRole(role: UserRole) {
 }
 
 export function canAccessPath(role: UserRole, pathname: string) {
-  if (pathname === '/') return true;
+  if (isPublicPath(pathname)) return true;
 
   if (pathname.startsWith('/admin/users')) {
     return role === 'super_admin';
