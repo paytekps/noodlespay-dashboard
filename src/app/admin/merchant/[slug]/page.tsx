@@ -216,7 +216,7 @@ async function updateConfig(deviceId: string, values: any) {
     }
     setCardsSaved(true);
   }
-  const canChangePlan = role === 'admin';
+  const canChangePlan = role === 'admin' || role === 'super_admin';
 
   if (!merchant) {
     return <div className="p-10">Loading...</div>;
