@@ -7,6 +7,8 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { canAccessPath, isUserRole, landingPageForRole, roleLabel, type UserRole } from '../lib/roles';
 
+const homeRoutes = new Set(['/admin', '/sales', '/dashboard']);
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -45,16 +47,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   }, []);
 
   useEffect(() => {
-    if (role !== 'super_admin' && role !== 'admin') {
-      setPreviewRole(null);
-      sessionStorage.removeItem('gimml_preview_role');
-      return;
-    }
+    const timer = window.setTimeout(() => {
+      if (role !== 'super_admin' && role !== 'admin') {
+        setPreviewRole(null);
+        sessionStorage.removeItem('gimml_preview_role');
+        return;
+      }
 
-    const saved = sessionStorage.getItem('gimml_preview_role');
-    if (saved === 'admin' || saved === 'sales_rep' || saved === 'merchant') {
-      setPreviewRole(saved);
-    }
+      const saved = sessionStorage.getItem('gimml_preview_role');
+      if (saved === 'admin' || saved === 'sales_rep' || saved === 'merchant') {
+        setPreviewRole(saved);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [role]);
 
   const effectiveRole = previewRole ?? role;
@@ -97,22 +102,27 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
   const allowed = isPublicPage || Boolean(effectiveRole && canAccessPath(effectiveRole, pathname));
   const canPreview = role === 'super_admin' || role === 'admin';
+  const navClass = (href: string) => {
+    const active = pathname === href || (!homeRoutes.has(href) && pathname.startsWith(`${href}/`));
+    return `rounded px-3 py-2 text-sm font-medium transition ${active ? 'bg-white text-gray-900' : 'text-gray-200 hover:bg-gray-700 hover:text-white'}`;
+  };
 
   return (
     <html lang="en">
       <body>
         {!isDevice && (
-          <div className="flex items-center justify-between bg-gray-800 p-4 text-white">
-            <div className="flex items-center gap-4">
-              {(effectiveRole === 'super_admin' || effectiveRole === 'admin') && <><Link href="/admin">Admin</Link>{effectiveRole === 'super_admin' && <Link href="/admin/users">Users &amp; Access</Link>}<Link href="/dashboard/devices">Devices</Link><Link href="/transactions">Transactions</Link></>}
-              {effectiveRole === 'sales_rep' && <><Link href="/sales">Sales Home</Link><Link href="/dashboard/devices">Assigned Devices</Link><Link href="/transactions">Transactions</Link></>}
-              {effectiveRole === 'merchant' && <><Link href="/dashboard">Merchant Home</Link><Link href="/dashboard/devices">My Devices</Link><Link href="/transactions">My Transactions</Link></>}
-              {!effectiveRole && <Link href="/">Login</Link>}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-gray-900 px-4 py-3 text-white">
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="mr-3 text-lg font-bold tracking-tight">Gimml</span>
+              {(effectiveRole === 'super_admin' || effectiveRole === 'admin') && <><Link className={navClass('/admin')} href="/admin">Home</Link>{effectiveRole === 'super_admin' && <Link className={navClass('/admin/users')} href="/admin/users">Users &amp; Access</Link>}<Link className={navClass('/dashboard/devices')} href="/dashboard/devices">Devices</Link><Link className={navClass('/transactions')} href="/transactions">Transactions</Link></>}
+              {effectiveRole === 'sales_rep' && <><Link className={navClass('/sales')} href="/sales">Home</Link><Link className={navClass('/dashboard/devices')} href="/dashboard/devices">Assigned Devices</Link><Link className={navClass('/transactions')} href="/transactions">Transactions</Link></>}
+              {effectiveRole === 'merchant' && <><Link className={navClass('/dashboard')} href="/dashboard">Home</Link><Link className={navClass('/dashboard/devices')} href="/dashboard/devices">My Devices</Link><Link className={navClass('/transactions')} href="/transactions">My Transactions</Link></>}
+              {!effectiveRole && <Link className={navClass('/')} href="/">Login</Link>}
             </div>
             {role && <div className="flex items-center gap-3">
               {canPreview && <label className="flex items-center gap-2 text-sm"><span>View as</span><select value={previewRole ?? 'off'} onChange={(event) => changePreview(event.target.value)} className="rounded bg-white px-2 py-1 text-gray-900"><option value="off">My account</option><option value="admin">Administrator</option><option value="sales_rep">Sales representative</option><option value="merchant">Merchant</option></select></label>}
               <span className="text-sm text-gray-300">{roleLabel(role)}</span>
-              <button onClick={handleLogout} className="rounded bg-red-500 px-3 py-1">Logout</button>
+              <button onClick={handleLogout} className="rounded border border-gray-600 px-3 py-1.5 text-sm hover:bg-gray-800">Sign out</button>
             </div>}
           </div>
         )}

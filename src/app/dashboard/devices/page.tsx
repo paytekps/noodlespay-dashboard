@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../../../lib/supabase';
 
 type ConfigHistoryEntry = {
@@ -106,17 +106,7 @@ export default function Devices() {
   const [historyByDevice, setHistoryByDevice] = useState<Record<string, ConfigHistoryEntry[]>>({});
   const [historyErrors, setHistoryErrors] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    loadProfile();
-    loadMerchants();
-  }, []);
-
-  useEffect(() => {
-    if (!profile) return;
-    loadDevices();
-  }, [profile, selectedMerchant]);
-
-  async function loadProfile() {
+  const loadProfile = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
@@ -127,17 +117,39 @@ export default function Devices() {
       .single();
 
     setProfile(data);
-  }
+  }, []);
 
-  async function loadMerchants() {
+  const loadMerchants = useCallback(async () => {
     const { data } = await supabase
       .from('merchants')
       .select('id, name');
 
     setMerchants(data || []);
-  }
+  }, []);
 
-  async function loadDevices() {
+  const loadTransactions = useCallback(async (devicesList: any[]) => {
+    const ids = devicesList.map(d => d.id);
+
+    if (!ids.length) {
+      setTransactionsMap({});
+      return;
+    }
+
+    const { data } = await supabase
+      .from('transactions')
+      .select('*')
+      .in('device_id', ids);
+
+    const map: any = {};
+    (data || []).forEach(t => {
+      if (!map[t.device_id]) map[t.device_id] = [];
+      map[t.device_id].push(t);
+    });
+
+    setTransactionsMap(map);
+  }, []);
+
+  const loadDevices = useCallback(async () => {
     let query = supabase
       .from('devices')
       .select(`*, merchants ( name )`);
@@ -202,25 +214,22 @@ max_amount: cfg?.max_amount || 100,
     );
 
     setDevices(formatted);
-    loadTransactions(formatted);
-  }
+    await loadTransactions(formatted);
+  }, [loadTransactions, profile, selectedMerchant]);
 
-  async function loadTransactions(devicesList: any[]) {
-    const ids = devicesList.map(d => d.id);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadProfile();
+      void loadMerchants();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadMerchants, loadProfile]);
 
-    const { data } = await supabase
-      .from('transactions')
-      .select('*')
-      .in('device_id', ids);
-
-    const map: any = {};
-    (data || []).forEach(t => {
-      if (!map[t.device_id]) map[t.device_id] = [];
-      map[t.device_id].push(t);
-    });
-
-    setTransactionsMap(map);
-  }
+  useEffect(() => {
+    if (!profile) return;
+    const timer = window.setTimeout(() => void loadDevices(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadDevices, profile]);
 
   async function loadHistory(deviceId: string) {
     setHistoryLoadingDeviceId(deviceId);
@@ -331,10 +340,23 @@ async function saveConfig(device: any) {
   return (
     <div className="p-10 max-w-5xl mx-auto">
 
-      <h1 className="text-3xl font-bold mb-8">Devices</h1>
+      <h1 className="text-3xl font-bold">Devices</h1>
+      <p className="mt-2 mb-8 text-gray-600">
+        {profile?.role === 'merchant' ? 'Manage the settings available with your purchased plan.' : profile?.role === 'sales_rep' ? 'Manage devices for merchants assigned to you.' : 'Manage devices across all merchants.'}
+      </p>
+
+      {profile?.role !== 'merchant' && (
+        <label className="mb-8 block max-w-md text-sm font-medium">
+          Merchant
+          <select value={selectedMerchant} onChange={(event) => setSelectedMerchant(event.target.value)} className="mt-1 w-full rounded border bg-white px-3 py-2">
+            <option value="">All authorized merchants</option>
+            {merchants.map((merchant) => <option key={merchant.id} value={merchant.id}>{merchant.name}</option>)}
+          </select>
+        </label>
+      )}
 
       {/* SUMMARY */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
+      <div className="grid gap-4 mb-8 sm:grid-cols-3">
         <div className="bg-white p-4 rounded-xl shadow text-center">
           <div className="text-sm text-gray-500">Total Volume</div>
           <div className="text-2xl font-bold text-green-600">
@@ -358,6 +380,12 @@ async function saveConfig(device: any) {
       </div>
 
       <div className="grid gap-6">
+
+        {devices.length === 0 && (
+          <div className="rounded-xl border border-dashed bg-white p-10 text-center text-gray-500">
+            No devices are available for this merchant selection.
+          </div>
+        )}
 
         {devices.map(d => (
 
