@@ -20,8 +20,10 @@ function csvCell(value: unknown) {
 export default function TransactionsPage() {
 const [transactions, setTransactions] = useState<any[]>([]);
 const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
+const [profileRole, setProfileRole] = useState('');
 
 const [search, setSearch] = useState('');
+const [merchantFilter, setMerchantFilter] = useState('all');
 const [statusFilter, setStatusFilter] = useState('all');
 const [brandFilter, setBrandFilter] = useState('all');
 const [dateFrom, setDateFrom] = useState('');
@@ -31,6 +33,16 @@ const [loadError, setLoadError] = useState('');
 
 useEffect(() => {
   let active = true;
+
+  supabase.auth.getUser().then(async ({ data: { user } }) => {
+    if (!user || !active) return;
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (active) setProfileRole(profile?.role || '');
+  });
 
   const request = supabase
       .from('transactions')
@@ -119,19 +131,39 @@ const filteredTransactions = transactions.filter((t) => {
     brandFilter === 'all' ||
     t.card_issuer === brandFilter;
 
+  const matchesMerchant =
+    merchantFilter === 'all' ||
+    t.merchant_id === merchantFilter;
+
   const transactionTime = new Date(t.created_at).getTime();
   const matchesDateFrom =
     !dateFrom || transactionTime >= new Date(`${dateFrom}T00:00:00`).getTime();
   const matchesDateTo =
     !dateTo || transactionTime <= new Date(`${dateTo}T23:59:59.999`).getTime();
 
-  return matchesSearch && matchesStatus && matchesBrand && matchesDateFrom && matchesDateTo;
+  return matchesSearch && matchesStatus && matchesBrand && matchesMerchant && matchesDateFrom && matchesDateTo;
 });
 
 const cardBrands = useMemo(() =>
   Array.from(new Set(transactions.map(t => t.card_issuer).filter(Boolean))).sort(),
   [transactions]
 );
+
+const merchantOptions = useMemo(() => {
+  const options = new Map<string, string>();
+  transactions.forEach((transaction) => {
+    if (transaction.merchant_id) {
+      options.set(transaction.merchant_id, transaction.merchants?.name || 'Unnamed merchant');
+    }
+  });
+  return Array.from(options, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+}, [transactions]);
+
+const accessDescription = profileRole === 'merchant'
+  ? 'Showing transactions for your merchant account only.'
+  : profileRole === 'sales_rep'
+    ? 'Showing transactions for merchants assigned to you.'
+    : 'Showing transactions across all merchants.';
 
 const approvedTransactions = filteredTransactions.filter(t => t.status === 'approved');
 const approvedVolume = approvedTransactions.reduce((sum, t) => sum + Number(t.amount || 0), 0);
@@ -167,7 +199,7 @@ function exportCsv() {
   return (
     <div className="p-10">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">Transactions</h1>
+        <div><h1 className="text-2xl font-bold">Transactions</h1><p className="mt-1 text-sm text-gray-600">{accessDescription}</p></div>
         <button
           type="button"
           onClick={exportCsv}
@@ -197,7 +229,7 @@ function exportCsv() {
         </div>
       </div>
 
-      <div className="mb-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+      <div className="mb-3 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
   <input
     type="search"
     placeholder="Search ID, card, merchant, or device"
@@ -226,10 +258,18 @@ function exportCsv() {
     {cardBrands.map(brand => <option key={brand} value={brand}>{brand}</option>)}
   </select>
 
+  {profileRole !== 'merchant' && (
+    <select value={merchantFilter} onChange={(e) => setMerchantFilter(e.target.value)} className="rounded border px-3 py-2">
+      <option value="all">All Merchants</option>
+      {merchantOptions.map((merchant) => <option key={merchant.id} value={merchant.id}>{merchant.name}</option>)}
+    </select>
+  )}
+
   <button
     type="button"
     onClick={() => {
       setSearch('');
+      setMerchantFilter('all');
       setStatusFilter('all');
       setBrandFilter('all');
       setDateFrom('');
