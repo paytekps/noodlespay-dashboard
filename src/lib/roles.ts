@@ -15,6 +15,10 @@ export function landingPageForRole(role: UserRole) {
 export function canAccessPath(role: UserRole, pathname: string) {
   if (pathname === '/') return true;
 
+  if (pathname.startsWith('/admin/users')) {
+    return role === 'super_admin';
+  }
+
   if (role === 'super_admin' || role === 'admin') {
     return pathname.startsWith('/admin') ||
       pathname.startsWith('/dashboard/devices') ||

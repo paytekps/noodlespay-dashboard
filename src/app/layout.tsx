@@ -104,7 +104,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {!isDevice && (
           <div className="flex items-center justify-between bg-gray-800 p-4 text-white">
             <div className="flex items-center gap-4">
-              {(effectiveRole === 'super_admin' || effectiveRole === 'admin') && <><Link href="/admin">Admin</Link><Link href="/dashboard/devices">Devices</Link><Link href="/transactions">Transactions</Link></>}
+              {(effectiveRole === 'super_admin' || effectiveRole === 'admin') && <><Link href="/admin">Admin</Link>{effectiveRole === 'super_admin' && <Link href="/admin/users">Users &amp; Access</Link>}<Link href="/dashboard/devices">Devices</Link><Link href="/transactions">Transactions</Link></>}
               {effectiveRole === 'sales_rep' && <><Link href="/sales">Sales Home</Link><Link href="/dashboard/devices">Assigned Devices</Link><Link href="/transactions">Transactions</Link></>}
               {effectiveRole === 'merchant' && <><Link href="/dashboard">Merchant Home</Link><Link href="/dashboard/devices">My Devices</Link><Link href="/transactions">My Transactions</Link></>}
               {!effectiveRole && <Link href="/">Login</Link>}
