@@ -21,6 +21,9 @@ export default function TransactionsPage() {
 const [transactions, setTransactions] = useState<any[]>([]);
 const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
 const [profileRole, setProfileRole] = useState('');
+const [transactionActions, setTransactionActions] = useState<Record<string, any[]>>({});
+const [actionBusy, setActionBusy] = useState('');
+const [actionError, setActionError] = useState('');
 
 const [search, setSearch] = useState('');
 const [merchantFilter, setMerchantFilter] = useState('all');
@@ -109,6 +112,72 @@ setLoading(false);
   };
 }, []);
 
+useEffect(() => {
+  if (!transactions.length) return;
+
+  let active = true;
+  const loadActions = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token || !active) return;
+
+    const ids = transactions.map((transaction) => transaction.id).join(',');
+    const response = await fetch(`/api/transaction/actions?transaction_ids=${encodeURIComponent(ids)}`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+      cache: 'no-store'
+    });
+    if (!response.ok || !active) return;
+
+    const payload = await response.json();
+    const grouped: Record<string, any[]> = {};
+    for (const action of payload.actions ?? []) {
+      grouped[action.transaction_id] = [...(grouped[action.transaction_id] ?? []), action];
+    }
+    setTransactionActions(grouped);
+  };
+
+  loadActions();
+  const interval = window.setInterval(loadActions, 5000);
+  return () => {
+    active = false;
+    window.clearInterval(interval);
+  };
+}, [transactions]);
+
+async function requestTransactionAction(transaction: any, actionType: 'void' | 'refund') {
+  const amountText = formatMoney(transaction.processed_amount ?? transaction.amount);
+  const warning = actionType === 'refund'
+    ? `Refund ${amountText}? The processor may require the customer's card to be tapped or inserted at the device.`
+    : `Void ${amountText}? This sends a reversal request to the device and processor.`;
+  if (!window.confirm(warning)) return;
+
+  setActionBusy(`${transaction.id}:${actionType}`);
+  setActionError('');
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Please sign in again.');
+
+    const response = await fetch('/api/transaction/actions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ transactionId: transaction.id, actionType })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || 'The request could not be queued.');
+
+    setTransactionActions((current) => ({
+      ...current,
+      [transaction.id]: [payload.action, ...(current[transaction.id] ?? [])]
+    }));
+  } catch (error) {
+    setActionError(error instanceof Error ? error.message : 'The request could not be queued.');
+  } finally {
+    setActionBusy('');
+  }
+}
+
 const filteredTransactions = transactions.filter((t) => {
   const q = search.toLowerCase();
 
@@ -175,17 +244,22 @@ function exportCsv() {
     'Date', 'Merchant', 'Device', 'Status', 'Amount', 'Base Amount', 'Tip', 'Fee',
     'Cashback', 'Processed Amount', 'Payment Method', 'Card Brand', 'BIN', 'Last 4',
     'Entry Method', 'Account Type', 'Payment Program', 'Transaction ID',
-    'Authorization Code', 'Reference Number', 'Batch ID', 'Trace Number', 'Host Message'
+    'Authorization Code', 'Reference Number', 'Batch ID', 'Trace Number', 'Host Message',
+    'Latest Action', 'Action Status', 'Action Requested', 'Action Message', 'Action Processor Reference'
   ];
 
-  const rows = filteredTransactions.map(t => [
-    new Date(t.created_at).toISOString(), t.merchants?.name, t.devices?.name,
-    t.status, t.amount, t.base_amount, t.tip_amount, t.fee_amount,
-    t.cashback_amount, t.processed_amount, t.payment_method, t.card_issuer,
-    t.card_bin, t.last4, t.card_entry_method, t.account_type, t.payment_program,
-    t.transaction_id, t.authorization_code, t.reference_number, t.batch_id,
-    t.trace_no, t.host_message
-  ]);
+  const rows = filteredTransactions.map(t => {
+    const latestAction = transactionActions[t.id]?.[0];
+    return [
+      new Date(t.created_at).toISOString(), t.merchants?.name, t.devices?.name,
+      t.status, t.amount, t.base_amount, t.tip_amount, t.fee_amount,
+      t.cashback_amount, t.processed_amount, t.payment_method, t.card_issuer,
+      t.card_bin, t.last4, t.card_entry_method, t.account_type, t.payment_program,
+      t.transaction_id, t.authorization_code, t.reference_number, t.batch_id,
+      t.trace_no, t.host_message, latestAction?.action_type, latestAction?.status,
+      latestAction?.requested_at, latestAction?.device_message, latestAction?.processor_reference
+    ];
+  });
 
   const csv = [headers, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n');
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
@@ -246,7 +320,8 @@ function exportCsv() {
     <option value="all">All Statuses</option>
     <option value="approved">Approved</option>
     <option value="declined">Declined</option>
-    <option value="pending">Pending</option>
+    <option value="voided">Voided</option>
+    <option value="refunded">Refunded</option>
   </select>
 
   <select
@@ -295,6 +370,11 @@ function exportCsv() {
 {loadError && (
   <div className="mb-6 rounded border border-red-200 bg-red-50 p-4 text-red-700" role="alert">
     {loadError}
+  </div>
+)}
+{actionError && (
+  <div className="mb-6 rounded border border-red-200 bg-red-50 p-4 text-red-700" role="alert">
+    {actionError}
   </div>
 )}
 {selectedTransaction && (
@@ -366,7 +446,7 @@ function exportCsv() {
 </div>
   </div>
 )}
-      <div className="border rounded-lg overflow-hidden">
+      <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-left">
 <thead className="bg-gray-100">
   <tr>
@@ -379,20 +459,21 @@ function exportCsv() {
     <th className="p-3">Last 4</th>
     <th className="p-3">Entry</th>
     <th className="p-3">Details</th>
+    <th className="p-3">Actions</th>
   </tr>
 </thead>
 
           <tbody>
 {loading ? (
   <tr>
-    <td colSpan={9} className="p-8 text-center text-gray-500">
+    <td colSpan={10} className="p-8 text-center text-gray-500">
       Loading transactions...
     </td>
   </tr>
 ) : filteredTransactions.length === 0 ? (
   <tr>
     <td
-      colSpan={9}
+      colSpan={10}
       className="p-8 text-center text-gray-500"
     >
       No transactions found
@@ -426,6 +507,10 @@ function exportCsv() {
                         ? 'bg-green-100 text-green-700'
                         : t.status === 'declined'
                           ? 'bg-red-100 text-red-700'
+                          : t.status === 'voided'
+                            ? 'bg-amber-100 text-amber-800'
+                            : t.status === 'refunded'
+                              ? 'bg-purple-100 text-purple-800'
                           : 'bg-gray-100 text-gray-700'
                     }`}
                   >
@@ -442,7 +527,7 @@ function exportCsv() {
                 <td className="p-3 text-sm text-gray-600">
                   {t.card_entry_method || t.payment_method || '—'}
                 </td>
-                <td className="p-3">
+<td className="p-3">
   <button
 onClick={() => setSelectedTransaction(t)}
     className="text-blue-600 underline"
@@ -450,6 +535,53 @@ onClick={() => setSelectedTransaction(t)}
     View
   </button>
 </td>
+                <td className="min-w-52 p-3 align-top">
+                  {(() => {
+                    const latestAction = transactionActions[t.id]?.[0];
+                    const activeAction = latestAction && ['queued', 'processing'].includes(latestAction.status);
+                    const canRequest = t.status === 'approved' && profileRole !== 'sales_rep' && !activeAction;
+                    return (
+                      <div className="space-y-2">
+                        {latestAction && (
+                          <div className="text-xs text-gray-600">
+                            Latest: <span className="font-semibold capitalize">{latestAction.action_type}</span>{' '}
+                            <span className="capitalize">{latestAction.status}</span>
+                            {latestAction.device_message ? ` — ${latestAction.device_message}` : ''}
+                          </div>
+                        )}
+                        {canRequest ? (
+                          <div className="flex items-start gap-2">
+                            <button
+                              type="button"
+                              onClick={() => requestTransactionAction(t, 'void')}
+                              disabled={Boolean(actionBusy)}
+                              className="rounded border border-amber-500 px-3 py-1.5 text-sm font-semibold text-amber-800 disabled:opacity-50"
+                            >
+                              {actionBusy === `${t.id}:void` ? 'Sending…' : 'Void'}
+                            </button>
+                            <div>
+                              <button
+                                type="button"
+                                onClick={() => requestTransactionAction(t, 'refund')}
+                                disabled={Boolean(actionBusy)}
+                                className="rounded border border-red-500 px-3 py-1.5 text-sm font-semibold text-red-700 disabled:opacity-50"
+                              >
+                                {actionBusy === `${t.id}:refund` ? 'Sending…' : 'Refund'}
+                              </button>
+                              <div className="mt-1 max-w-36 text-[11px] leading-4 text-gray-500">
+                                The customer&apos;s card may be required at the device.
+                              </div>
+                            </div>
+                          </div>
+                        ) : !latestAction && (
+                          <span className="text-xs text-gray-500">
+                            {profileRole === 'sales_rep' ? 'View only' : 'Not available'}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </td>
               </tr>
 ))
 )}

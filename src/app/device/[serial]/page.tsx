@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { supabase } from '../../../lib/supabase';
 
@@ -10,7 +10,7 @@ export default function DevicePage() {
 
   const [config, setConfig] = useState<any>(null);
   const [amount, setAmount] = useState(0);
-  const [initialized, setInitialized] = useState(false);
+  const initialized = useRef(false);
 
   const [timer, setTimer] = useState<any>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -19,26 +19,7 @@ const [intervalTimer, setIntervalTimer] = useState<any>(null);
   const [status, setStatus] = useState<'idle' | 'processing' | 'approved' | 'declined'>('idle');
   const [declineMessage, setDeclineMessage] = useState('');
 
-  useEffect(() => {
-    if (!serial) return;
-
-    loadDevice();
-
-    const channel = supabase
-      .channel(`device-${serial}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'device_config' },
-        () => loadDevice()
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [serial]);
-
-  async function loadDevice() {
+  const loadDevice = useCallback(async () => {
     const res = await fetch('/api/device/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -54,11 +35,31 @@ const [intervalTimer, setIntervalTimer] = useState<any>(null);
     const data = await res.json();
     setConfig(data);
 
-    if (!initialized) {
+    if (!initialized.current) {
       setAmount(data.default_amount || 0);
-      setInitialized(true);
+      initialized.current = true;
     }
-  }
+  }, [serial]);
+
+  useEffect(() => {
+    if (!serial) return;
+
+    const initialLoad = window.setTimeout(() => void loadDevice(), 0);
+
+    const channel = supabase
+      .channel(`device-${serial}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'device_config' },
+        () => loadDevice()
+      )
+      .subscribe();
+
+    return () => {
+      window.clearTimeout(initialLoad);
+      supabase.removeChannel(channel);
+    };
+  }, [serial, loadDevice]);
 
 function clearExistingTimer() {
 
@@ -103,14 +104,21 @@ setIntervalTimer(interval);
   async function saveTransaction(statusValue: 'approved' | 'declined') {
     if (!config?.device_id || !config?.merchant_id) return;
 
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return;
+
     await fetch('/api/transaction/create', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({
         device_id: config.device_id,
         merchant_id: config.merchant_id,
         amount,
-        status: statusValue
+        status: statusValue,
+        payment_method: 'simulator'
       })
     });
   }

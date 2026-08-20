@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { authenticatedDeviceRequest } from '../../../../lib/device-request';
+import {
+  canAccessMerchant,
+  dashboardRequestContext
+} from '../../../../lib/dashboard-request';
 
 
 function safeText(value: unknown, maxLength = 120) {
@@ -34,14 +38,6 @@ function safeDiagnosticData(packet: Record<string, unknown>) {
 
 export async function POST(req: Request) {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !serviceKey) {
-      console.error('❌ Transaction service is missing required configuration');
-      return NextResponse.json({ error: 'Transaction service unavailable' }, { status: 503 });
-    }
-    const supabase = createClient(supabaseUrl, serviceKey);
-
     const body = await req.json();
     const { device_id, amount, status, transaction_data } = body;
     const packet = transaction_data && typeof transaction_data === 'object'
@@ -77,27 +73,38 @@ export async function POST(req: Request) {
       );
     }
 
-    // ✅ SAFE device validation
-    const { data: device, error: deviceError } = await supabase
-      .from('devices')
-      .select('id, merchant_id')
-      .eq('id', device_id)
-      .maybeSingle();
+    const isSimulator = body.payment_method === 'simulator';
+    let supabase;
+    let device: { id: string; merchant_id: string | null } | null = null;
 
-    if (deviceError) {
-      console.error('❌ Device lookup error:', deviceError);
-
-      return NextResponse.json(
-        { error: 'Device lookup failed' },
-        { status: 500 }
-      );
+    if (isSimulator) {
+      const context = await dashboardRequestContext(req);
+      if ('error' in context) {
+        return NextResponse.json({ error: context.error }, { status: context.status });
+      }
+      const { data: simulatedDevice, error: deviceError } = await context.admin
+        .from('devices')
+        .select('id, merchant_id')
+        .eq('id', device_id)
+        .maybeSingle();
+      if (deviceError
+          || !simulatedDevice?.merchant_id
+          || !canAccessMerchant(context, simulatedDevice.merchant_id)) {
+        return NextResponse.json({ error: 'Invalid device' }, { status: 400 });
+      }
+      supabase = context.admin;
+      device = simulatedDevice;
+    } else {
+      const context = await authenticatedDeviceRequest(req, { deviceId: device_id });
+      if ('error' in context) {
+        return NextResponse.json({ error: context.error }, { status: context.status });
+      }
+      supabase = context.admin;
+      device = context.device;
     }
 
-    if (!device) {
-      return NextResponse.json(
-        { error: 'Invalid device' },
-        { status: 400 }
-      );
+    if (!device.merchant_id) {
+      return NextResponse.json({ error: 'The device is not assigned to a merchant.' }, { status: 400 });
     }
 
     const { data: config, error: configError } = await supabase
@@ -137,7 +144,7 @@ export async function POST(req: Request) {
 
     const receivedCardDigits = safeDigits(field('last4', 'cardNumber'), 32);
     const receivedBin = safeDigits(field('card_bin', 'cardBIN'), 8);
-    const paymentMethod = body.payment_method === 'simulator' ? 'simulator' : 'datecs';
+    const paymentMethod = isSimulator ? 'simulator' : 'datecs';
 
     const { data, error } = await supabase
       .from('transactions')

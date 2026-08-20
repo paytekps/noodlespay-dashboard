@@ -105,6 +105,10 @@ export default function Devices() {
   const [historyLoadingDeviceId, setHistoryLoadingDeviceId] = useState<string | null>(null);
   const [historyByDevice, setHistoryByDevice] = useState<Record<string, ConfigHistoryEntry[]>>({});
   const [historyErrors, setHistoryErrors] = useState<Record<string, string>>({});
+  const [pairedDeviceIds, setPairedDeviceIds] = useState<string[]>([]);
+  const [pairingCodes, setPairingCodes] = useState<Record<string, { code: string; expiresAt: string }>>({});
+  const [pairingBusyDeviceId, setPairingBusyDeviceId] = useState<string | null>(null);
+  const [pairingErrors, setPairingErrors] = useState<Record<string, string>>({});
 
   const loadProfile = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -224,6 +228,64 @@ max_amount: cfg?.max_amount || 100,
     }, 0);
     return () => window.clearTimeout(timer);
   }, [loadMerchants, loadProfile]);
+
+  useEffect(() => {
+    if (!devices.length || (profile?.role !== 'admin' && profile?.role !== 'super_admin')) {
+      setPairedDeviceIds([]);
+      return;
+    }
+
+    let active = true;
+    const loadPairingStatus = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token || !active) return;
+      const ids = devices.map((device) => device.id).join(',');
+      const response = await fetch(
+        `/api/admin/devices/pairing-code?device_ids=${encodeURIComponent(ids)}`,
+        { headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store' }
+      );
+      if (!response.ok || !active) return;
+      const payload = await response.json();
+      setPairedDeviceIds(payload.paired_device_ids ?? []);
+    };
+
+    loadPairingStatus();
+    const interval = window.setInterval(loadPairingStatus, 5000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [devices, profile?.role]);
+
+  async function createPairingCode(deviceId: string) {
+    setPairingBusyDeviceId(deviceId);
+    setPairingErrors((current) => ({ ...current, [deviceId]: '' }));
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Please sign in again.');
+      const response = await fetch('/api/admin/devices/pairing-code', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ deviceId })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'A pairing code could not be created.');
+      setPairingCodes((current) => ({
+        ...current,
+        [deviceId]: { code: payload.pairing_code, expiresAt: payload.expires_at }
+      }));
+    } catch (error) {
+      setPairingErrors((current) => ({
+        ...current,
+        [deviceId]: error instanceof Error ? error.message : 'A pairing code could not be created.'
+      }));
+    } finally {
+      setPairingBusyDeviceId(null);
+    }
+  }
 
   useEffect(() => {
     if (!profile) return;
@@ -556,6 +618,45 @@ async function saveConfig(device: any) {
                 </span>
               )}
             </div>
+
+            {(profile?.role === 'admin' || profile?.role === 'super_admin') && (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="font-semibold">Dashboard Void &amp; Refund pairing</div>
+                    <div className="mt-1 text-sm text-gray-600">
+                      {pairedDeviceIds.includes(d.id)
+                        ? 'Paired — this device can securely receive approved transaction actions.'
+                        : 'Not paired — transaction actions cannot be sent to this device yet.'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => createPairingCode(d.id)}
+                    disabled={pairingBusyDeviceId === d.id}
+                    className="rounded border bg-white px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                  >
+                    {pairingBusyDeviceId === d.id
+                      ? 'Creating…'
+                      : pairedDeviceIds.includes(d.id) ? 'Create new pairing code' : 'Create pairing code'}
+                  </button>
+                </div>
+
+                {pairingCodes[d.id] && (
+                  <div className="mt-3 rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950">
+                    <div>On the physical device, hold the serial number in the bottom-left corner and enter:</div>
+                    <div className="my-2 font-mono text-2xl font-bold tracking-widest">
+                      {pairingCodes[d.id].code}
+                    </div>
+                    <div>This one-time code expires at {new Date(pairingCodes[d.id].expiresAt).toLocaleTimeString()}.</div>
+                  </div>
+                )}
+
+                {pairingErrors[d.id] && (
+                  <div className="mt-2 text-sm text-red-700" role="alert">{pairingErrors[d.id]}</div>
+                )}
+              </div>
+            )}
 
             <div className="border-t pt-4">
               <button
