@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { supabase } from '../../../lib/supabase';
 
 type ConfigHistoryEntry = {
@@ -938,6 +939,15 @@ async function saveConfig(device: any) {
                 {pairingErrors[d.id] && (
                   <div className="mt-2 text-sm text-red-700" role="alert">{pairingErrors[d.id]}</div>
                 )}
+
+                <div className="mt-4 border-t pt-4">
+                  <Link
+                    href={`/dashboard/devices/${d.id}/setup`}
+                    className="inline-flex rounded bg-black px-4 py-2 text-sm font-semibold text-white"
+                  >
+                    Open full processor / VAR setup
+                  </Link>
+                </div>
               </div>
             )}
 

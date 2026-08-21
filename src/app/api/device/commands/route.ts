@@ -102,7 +102,26 @@ export async function POST(req: Request) {
   const locationRequest = locationControl?.location_refresh_requested_at
     ? { requested_at: locationControl.location_refresh_requested_at }
     : null;
-  if (!action) return json({ command: null, location_request: locationRequest });
+  if (!action) {
+    const { data: settlements, error: settlementClaimError } = await context.admin
+      .rpc('claim_device_settlement', { p_device_id: context.device.id });
+    if (settlementClaimError) {
+      console.error('Device settlement claim failed:', settlementClaimError);
+      return json({ error: 'A settlement command could not be loaded.' }, 500);
+    }
+    const settlement = settlements?.[0];
+    if (!settlement) return json({ command: null, location_request: locationRequest });
+    return json({
+      location_request: locationRequest,
+      command: {
+        id: settlement.id,
+        action: 'settlement',
+        amount: 0,
+        business_date: settlement.business_date,
+        request_source: settlement.request_source
+      }
+    });
+  }
 
   const { data: transaction, error: transactionError } = await context.admin
     .from('transactions')
@@ -171,9 +190,32 @@ export async function PATCH(req: Request) {
     console.error('Device command completion failed:', error);
     return json({ error: 'The device command result could not be saved.' }, 500);
   }
-  if (!actions?.length) {
-    return json({ error: 'The active device command was not found.' }, 409);
+  if (actions?.length) {
+    return json({ success: true, command_type: 'transaction_action' });
   }
 
-  return json({ success: true });
+  const transactionCount = Number.isInteger(body.transaction_count)
+    && body.transaction_count >= 0 && body.transaction_count <= 1000000
+    ? body.transaction_count
+    : null;
+  const totalAmount = finiteNumber(body.total_amount);
+  const batchId = typeof body.batch_id === 'string' ? body.batch_id.slice(0, 120) : null;
+  const { data: settlements, error: settlementError } = await context.admin.rpc(
+    'complete_device_settlement',
+    {
+      p_device_id: context.device.id,
+      p_run_id: commandId,
+      p_success: outcome === 'succeeded',
+      p_message: message,
+      p_transaction_count: transactionCount,
+      p_total_amount: totalAmount !== null && totalAmount >= 0 ? totalAmount : null,
+      p_batch_id: batchId
+    }
+  );
+  if (settlementError) {
+    console.error('Device settlement completion failed:', settlementError);
+    return json({ error: 'The settlement result could not be saved.' }, 500);
+  }
+  if (!settlements?.length) return json({ error: 'The active device command was not found.' }, 409);
+  return json({ success: true, command_type: 'settlement' });
 }
