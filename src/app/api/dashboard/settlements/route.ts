@@ -5,19 +5,26 @@ const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}
 
 export const dynamic = 'force-dynamic';
 
+function json(body: unknown, status = 200) {
+  return NextResponse.json(body, {
+    status,
+    headers: { 'Cache-Control': 'private, no-store, max-age=0' }
+  });
+}
+
 export async function GET(req: Request) {
   const context = await dashboardRequestContext(req);
   if ('error' in context) {
-    return NextResponse.json({ error: context.error }, { status: context.status });
+    return json({ error: context.error }, context.status);
   }
 
   const requestedDeviceId = new URL(req.url).searchParams.get('device_id')?.trim() ?? '';
   if (requestedDeviceId && !uuidPattern.test(requestedDeviceId)) {
-    return NextResponse.json({ error: 'Choose a valid device.' }, { status: 400 });
+    return json({ error: 'Choose a valid device.' }, 400);
   }
 
   if (context.merchantIds?.length === 0) {
-    return NextResponse.json({ role: context.role, devices: [], settlements: [] });
+    return json({ role: context.role, devices: [], settlements: [] });
   }
 
   let deviceQuery = context.admin
@@ -30,12 +37,12 @@ export async function GET(req: Request) {
   const { data: devices, error: deviceError } = await deviceQuery;
   if (deviceError) {
     console.error('Batch reporting device lookup failed:', deviceError);
-    return NextResponse.json({ error: 'Batch reporting could not be loaded.' }, { status: 500 });
+    return json({ error: 'Batch reporting could not be loaded.' }, 500);
   }
 
   const deviceIds = (devices ?? []).map((device) => device.id);
   if (!deviceIds.length) {
-    return NextResponse.json({ role: context.role, devices: [], settlements: [] });
+    return json({ role: context.role, devices: [], settlements: [] });
   }
 
   const [runsResult, schedulesResult, profilesResult] = await Promise.all([
@@ -58,7 +65,7 @@ export async function GET(req: Request) {
   const lookupError = runsResult.error || schedulesResult.error || profilesResult.error;
   if (lookupError) {
     console.error('Batch reporting lookup failed:', lookupError);
-    return NextResponse.json({ error: 'Batch reporting could not be loaded.' }, { status: 500 });
+    return json({ error: 'Batch reporting could not be loaded.' }, 500);
   }
 
   const schedules = new Map((schedulesResult.data ?? []).map((schedule) => [schedule.device_id, schedule]));
@@ -81,7 +88,7 @@ export async function GET(req: Request) {
     };
   });
 
-  return NextResponse.json({
+  return json({
     role: context.role,
     devices: safeDevices,
     settlements: runsResult.data ?? []
