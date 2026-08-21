@@ -133,11 +133,10 @@ export async function GET(req: Request) {
   const deviceId = new URL(req.url).searchParams.get('device_id')?.trim() ?? '';
   if (!uuidPattern.test(deviceId)) return NextResponse.json({ error: 'Choose a valid device.' }, { status: 400 });
 
-  const [deviceResult, profileResult, scheduleResult, runsResult, pairingResult, historyResult] = await Promise.all([
+  const [deviceResult, profileResult, scheduleResult, pairingResult, historyResult] = await Promise.all([
     context.admin.from('devices').select('id, name, serial_number, merchant_id, status, app_version, merchants(name)').eq('id', deviceId).maybeSingle(),
     context.admin.from('device_provisioning_profiles').select('*').eq('device_id', deviceId).maybeSingle(),
     context.admin.from('device_settlement_schedules').select('*').eq('device_id', deviceId).maybeSingle(),
-    context.admin.from('settlement_runs').select('id, business_date, scheduled_for, request_source, status, requested_at, completed_at, attempt_count, transaction_count, total_amount, batch_id, device_message').eq('device_id', deviceId).order('requested_at', { ascending: false }).limit(25),
     context.admin.from('device_command_credentials').select('device_id').eq('device_id', deviceId).is('disabled_at', null).maybeSingle(),
     context.admin.from('device_provisioning_history').select('id, action, changed_at, changed_by').eq('device_id', deviceId).order('changed_at', { ascending: false }).limit(20)
   ]);
@@ -147,7 +146,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Device setup could not be loaded.' }, { status: 500 });
   }
   if (!deviceResult.data) return NextResponse.json({ error: 'Device not found.' }, { status: 404 });
-  const firstError = profileResult.error || scheduleResult.error || runsResult.error || pairingResult.error || historyResult.error;
+  const firstError = profileResult.error || scheduleResult.error || pairingResult.error || historyResult.error;
   if (firstError) {
     console.error('Provisioning data lookup failed:', firstError);
     return NextResponse.json({ error: 'Device setup could not be loaded.' }, { status: 500 });
@@ -155,7 +154,7 @@ export async function GET(req: Request) {
   const profile = { ...defaults, ...(profileResult.data ?? {}) };
   const schedule = scheduleResult.data ?? { enabled: false, settlement_time: '03:00:00', time_zone: profile.time_zone };
   return NextResponse.json({
-    device: deviceResult.data, profile, schedule, settlements: runsResult.data ?? [],
+    device: deviceResult.data, profile, schedule,
     history: historyResult.data ?? [], paired: Boolean(pairingResult.data),
     readiness_errors: readinessErrors(profile, Boolean(schedule.enabled))
   });

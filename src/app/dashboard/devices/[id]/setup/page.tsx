@@ -90,7 +90,6 @@ export default function DeviceSetupPage() {
   const [customFields, setCustomFields] = useState<Array<{ key: string; value: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [settling, setSettling] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
@@ -170,35 +169,12 @@ export default function DeviceSetupPage() {
     }
   }
 
-  async function settleNow() {
-    if (!window.confirm('Run the normal Datecs End-of-Day settlement now? This closes the current terminal batch.')) return;
-    setSettling(true);
-    setError('');
-    setNotice('');
-    try {
-      const response = await authenticatedFetch('/api/admin/devices/settlements', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceId, confirm: true })
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || 'Settlement could not be queued.');
-      setNotice('End of Day queued. The paired device will run it automatically.');
-      await load();
-    } catch (settlementError) {
-      setError(settlementError instanceof Error ? settlementError.message : 'Settlement could not be queued.');
-    } finally {
-      setSettling(false);
-    }
-  }
-
   if (loading) return <div className="mx-auto max-w-6xl p-10">Loading full device setup…</div>;
   if (!profile || !schedule || !data?.device) {
     return <div className="mx-auto max-w-4xl p-10"><Link href="/dashboard/devices" className="text-blue-700 hover:underline">← Devices</Link><div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">{error || 'Device setup is unavailable.'}</div></div>;
   }
 
   const merchantName = Array.isArray(data.device.merchants) ? data.device.merchants[0]?.name : data.device.merchants?.name;
-  const canSettle = data.paired && profile.capture_mode === 'terminal' && profile.activation_status === 'active';
 
   return (
     <main className="mx-auto max-w-6xl space-y-6 p-6 sm:p-10">
@@ -260,13 +236,13 @@ export default function DeviceSetupPage() {
         <button type="button" onClick={() => setCustomFields((current) => [...current, { key: '', value: '' }])} className="mt-3 rounded-lg border bg-white px-3 py-2 text-sm font-semibold">Add processor field</button>
       </Section>
 
-      <Section title="8. Settlement / batch close" description={profile.capture_mode === 'host' ? 'Host capture: the processor closes the batch. NoodlPay records the setup but does not command the terminal.' : 'Terminal capture: NoodlPay queues one normal End-of-Day close at the selected merchant-local time.'}>
+      <Section title="8. Settlement setup" description={profile.capture_mode === 'host' ? 'Host capture: the processor closes the batch. NoodlPay records the setup but does not command the terminal.' : 'Terminal capture: NoodlPay queues one normal End-of-Day close at the selected merchant-local time.'}>
         <div className="grid items-end gap-4 md:grid-cols-3">
           <label className="flex items-center gap-2 rounded-lg border p-3 text-sm"><input type="checkbox" checked={Boolean(schedule.enabled)} disabled={profile.capture_mode !== 'terminal'} onChange={(event) => setSchedule((current: any) => ({ ...current, enabled: event.target.checked }))} />Automatic daily settlement</label>
           <Field label="Local settlement time" type="time" value={schedule.settlement_time} onChange={(value: string) => setSchedule((current: any) => ({ ...current, settlement_time: value }))} />
           <Field label="Settlement time zone" value={schedule.time_zone} onChange={(value: string) => setSchedule((current: any) => ({ ...current, time_zone: value }))} />
         </div>
-        <div className="mt-4 flex flex-wrap items-center gap-3"><button type="button" disabled={!canSettle || settling} onClick={settleNow} className="rounded-lg bg-red-700 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">{settling ? 'Queuing…' : 'Run End of Day now'}</button><span className="text-xs text-gray-600">Uses Datecs normal START settlement. Force-close Z is intentionally not automated.</span></div>
+        <div className="mt-4 flex flex-wrap items-center gap-3"><Link href="/dashboard/settlements" className="rounded-lg border border-blue-700 bg-white px-4 py-2 text-sm font-semibold text-blue-700">Open batch reports</Link><span className="text-xs text-gray-600">Batch results and manual administrator controls are kept separate from processor setup.</span></div>
         {!data.paired && <p className="mt-2 text-sm text-amber-800">Pair this device on the Devices page before remote settlement can run.</p>}
       </Section>
 
@@ -274,9 +250,6 @@ export default function DeviceSetupPage() {
 
       <div className="sticky bottom-3 flex items-center justify-between gap-4 rounded-xl border bg-white/95 p-4 shadow-lg backdrop-blur"><div className="text-sm text-gray-600">Every save is audit logged.</div><button type="button" disabled={saving} onClick={save} className="rounded-lg bg-blue-700 px-5 py-2 font-semibold text-white disabled:opacity-50">{saving ? 'Saving full setup…' : 'Save full setup'}</button></div>
 
-      <Section title="Settlement history" description="Scheduled and manual End-of-Day attempts reported by the device.">
-        {(data.settlements || []).length === 0 ? <p className="text-sm text-gray-500">No settlement attempts yet.</p> : <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead><tr className="border-b text-gray-600"><th className="p-2">Requested</th><th className="p-2">Business date</th><th className="p-2">Source</th><th className="p-2">Status</th><th className="p-2">Transactions</th><th className="p-2">Total</th><th className="p-2">Batch</th><th className="p-2">Message</th></tr></thead><tbody>{data.settlements.map((run: any) => <tr key={run.id} className="border-b align-top"><td className="p-2">{new Date(run.requested_at).toLocaleString()}</td><td className="p-2">{run.business_date}</td><td className="p-2 capitalize">{run.request_source}</td><td className="p-2"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${statusStyle(run.status)}`}>{run.status}</span></td><td className="p-2">{run.transaction_count ?? '—'}</td><td className="p-2">{run.total_amount == null ? '—' : `$${Number(run.total_amount).toFixed(2)}`}</td><td className="p-2">{run.batch_id || '—'}</td><td className="max-w-xs p-2">{run.device_message || '—'}</td></tr>)}</tbody></table></div>}
-      </Section>
     </main>
   );
 }
