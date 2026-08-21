@@ -10,6 +10,66 @@ function json(body: unknown, status = 200) {
   });
 }
 
+function finiteNumber(value: unknown) {
+  const number = typeof value === 'number' ? value : Number.NaN;
+  return Number.isFinite(number) ? number : null;
+}
+
+function heartbeatUpdate(body: Record<string, unknown>) {
+  const now = Date.now();
+  const update: Record<string, string | number | boolean | null> = {
+    last_seen_at: new Date(now).toISOString()
+  };
+
+  if (typeof body.location_permission_granted === 'boolean') {
+    update.location_permission_granted = body.location_permission_granted;
+  }
+  if (typeof body.location_service_enabled === 'boolean') {
+    update.location_service_enabled = body.location_service_enabled;
+  }
+
+  const refreshStatus = typeof body.location_refresh_status === 'string'
+    ? body.location_refresh_status
+    : '';
+  if (['enabled', 'permission_required', 'settings_required', 'error'].includes(refreshStatus)) {
+    update.location_refresh_status = refreshStatus;
+    update.location_refresh_status_updated_at = new Date(now).toISOString();
+  }
+
+  const appVersion = typeof body.app_version === 'string'
+    ? body.app_version.trim().slice(0, 60)
+    : '';
+  if (appVersion) update.app_version = appVersion;
+
+  const latitude = finiteNumber(body.location_latitude);
+  const longitude = finiteNumber(body.location_longitude);
+  const accuracy = finiteNumber(body.location_accuracy_m);
+  const recordedAtMs = finiteNumber(body.location_recorded_at_ms);
+  const provider = typeof body.location_provider === 'string'
+    ? body.location_provider.trim().slice(0, 30)
+    : '';
+  const locationTimeIsReasonable = recordedAtMs !== null
+    && recordedAtMs >= now - 7 * 24 * 60 * 60 * 1000
+    && recordedAtMs <= now + 5 * 60 * 1000;
+
+  if (body.location_permission_granted === true
+      && latitude !== null && latitude >= -90 && latitude <= 90
+      && longitude !== null && longitude >= -180 && longitude <= 180
+      && locationTimeIsReasonable) {
+    update.location_latitude = latitude;
+    update.location_longitude = longitude;
+    update.location_updated_at = new Date(recordedAtMs).toISOString();
+    if (accuracy !== null && accuracy >= 0 && accuracy <= 100000) {
+      update.location_accuracy_m = accuracy;
+    }
+    if (/^[a-z0-9_-]{1,30}$/i.test(provider)) {
+      update.location_provider = provider;
+    }
+  }
+
+  return update;
+}
+
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const context = await authenticatedDeviceRequest(req, { serialNumber: body.serial_number });
@@ -17,9 +77,18 @@ export async function POST(req: Request) {
 
   const { error: heartbeatError } = await context.admin
     .from('devices')
-    .update({ last_seen_at: new Date().toISOString() })
+    .update(heartbeatUpdate(body))
     .eq('id', context.device.id);
   if (heartbeatError) console.error('Device heartbeat update failed:', heartbeatError);
+
+  const { data: locationControl, error: locationControlError } = await context.admin
+    .from('devices')
+    .select('location_refresh_requested_at')
+    .eq('id', context.device.id)
+    .maybeSingle();
+  if (locationControlError) {
+    console.error('Device location request lookup failed:', locationControlError);
+  }
 
   const { data: actions, error: claimError } = await context.admin
     .rpc('claim_device_transaction_action', { p_device_id: context.device.id });
@@ -30,7 +99,10 @@ export async function POST(req: Request) {
   }
 
   const action = actions?.[0];
-  if (!action) return json({ command: null });
+  const locationRequest = locationControl?.location_refresh_requested_at
+    ? { requested_at: locationControl.location_refresh_requested_at }
+    : null;
+  if (!action) return json({ command: null, location_request: locationRequest });
 
   const { data: transaction, error: transactionError } = await context.admin
     .from('transactions')
@@ -51,6 +123,7 @@ export async function POST(req: Request) {
   }
 
   return json({
+    location_request: locationRequest,
     command: {
       id: action.id,
       action: action.action_type,

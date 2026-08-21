@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Image from 'next/image';
 import { supabase } from '../../../lib/supabase';
 
 type ConfigHistoryEntry = {
@@ -27,6 +28,204 @@ const historyFieldLabels: Record<string, string> = {
 const moneyHistoryFields = new Set([
   'default_amount', 'max_amount', 'preset_1', 'preset_2', 'preset_3', 'step_amount'
 ]);
+
+const ONLINE_WINDOW_MS = 20_000;
+
+function formatTimeAgo(value: string | null | undefined, nowMs: number) {
+  if (!value) return 'Never';
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return 'Unknown';
+  const seconds = Math.max(0, Math.floor((nowMs - timestamp) / 1000));
+  if (seconds < 5) return 'Just now';
+  if (seconds < 60) return `${seconds} seconds ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
+function DeviceHealthPanel({
+  device,
+  nowMs,
+  canControlLocation,
+  locationBusy,
+  locationError,
+  onRequestLocation
+}: {
+  device: any;
+  nowMs: number;
+  canControlLocation: boolean;
+  locationBusy: boolean;
+  locationError?: string;
+  onRequestLocation: () => void;
+}) {
+  const lastSeenMs = device.last_seen_at ? Date.parse(device.last_seen_at) : Number.NaN;
+  const isOnline = Number.isFinite(lastSeenMs) && nowMs - lastSeenMs <= ONLINE_WINDOW_MS;
+  const latitude = Number(device.location_latitude);
+  const longitude = Number(device.location_longitude);
+  const hasLocation = Number.isFinite(latitude) && Number.isFinite(longitude);
+  const [mapImageUrl, setMapImageUrl] = useState('');
+  const [mapLoading, setMapLoading] = useState(false);
+  const [mapError, setMapError] = useState('');
+  const [mapSecondsRemaining, setMapSecondsRemaining] = useState(60);
+
+  useEffect(() => {
+    if (!mapImageUrl) return;
+    const interval = window.setInterval(() => {
+      setMapSecondsRemaining(current => Math.max(0, current - 1));
+    }, 1000);
+    const timeout = window.setTimeout(() => {
+      setMapImageUrl(current => {
+        if (current) URL.revokeObjectURL(current);
+        return '';
+      });
+    }, 60_000);
+    return () => {
+      window.clearInterval(interval);
+      window.clearTimeout(timeout);
+    };
+  }, [mapImageUrl]);
+
+  useEffect(() => () => {
+    if (mapImageUrl) URL.revokeObjectURL(mapImageUrl);
+  }, [mapImageUrl]);
+
+  async function showMap() {
+    setMapLoading(true);
+    setMapError('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Please sign in again.');
+      const response = await fetch(
+        `/api/dashboard/devices/location?device_id=${encodeURIComponent(device.id)}`,
+        { headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store' }
+      );
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || 'The map could not be loaded.');
+      }
+
+      const imageUrl = URL.createObjectURL(await response.blob());
+      setMapSecondsRemaining(60);
+      setMapImageUrl(imageUrl);
+    } catch (error) {
+      setMapError(error instanceof Error ? error.message : 'The map could not be loaded.');
+    } finally {
+      setMapLoading(false);
+    }
+  }
+
+  function closeMap() {
+    setMapImageUrl(current => {
+      if (current) URL.revokeObjectURL(current);
+      return '';
+    });
+  }
+
+  let locationMessage = 'Location status has not been reported by this app version.';
+  if (device.location_permission_granted === false) {
+    locationMessage = 'Location permission is not enabled on the device.';
+  } else if (device.location_service_enabled === false) {
+    locationMessage = 'Location permission is allowed, but the device Location switch is off.';
+  } else if (device.location_permission_granted === true && !hasLocation) {
+    locationMessage = 'Location is enabled; waiting for the first GPS fix.';
+  }
+
+  const refreshStatusMessages: Record<string, string> = {
+    pending: 'GPS request sent; waiting for the device.',
+    enabled: 'The device confirms that Location is on.',
+    permission_required: 'Location permission must be approved on the device.',
+    settings_required: 'The device opened Android Location settings because the master switch is off.',
+    error: 'The device could not start a location refresh.'
+  };
+  const refreshStatusMessage = refreshStatusMessages[device.location_refresh_status] ?? '';
+
+  return (
+    <div className="grid gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4 sm:grid-cols-2">
+      <div>
+        <div className="flex items-center gap-2">
+          <span
+            className={`h-2.5 w-2.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`}
+            aria-hidden="true"
+          />
+          <span className="font-semibold">{isOnline ? 'Online' : 'Offline'}</span>
+        </div>
+        <div className="mt-1 text-sm text-gray-600">
+          Last seen: {formatTimeAgo(device.last_seen_at, nowMs)}
+        </div>
+        {device.app_version && (
+          <div className="mt-1 text-xs text-gray-500">App version {device.app_version}</div>
+        )}
+        {refreshStatusMessage && (
+          <div className="mt-2 text-xs text-gray-600">{refreshStatusMessage}</div>
+        )}
+        {canControlLocation && (
+          <button
+            type="button"
+            onClick={onRequestLocation}
+            disabled={locationBusy || !isOnline}
+            className="mt-3 rounded bg-green-700 px-3 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {locationBusy ? 'Sending GPS request…' : hasLocation ? 'Refresh GPS location' : 'Enable GPS on device'}
+          </button>
+        )}
+        {canControlLocation && !isOnline && (
+          <div className="mt-1 text-xs text-gray-500">The device must be online to receive this request.</div>
+        )}
+        {locationError && (
+          <div className="mt-2 text-xs text-red-700" role="alert">{locationError}</div>
+        )}
+      </div>
+
+      <div className="text-sm">
+        <div className="font-semibold">Device location</div>
+        {hasLocation ? (
+          <div className="mt-1 text-gray-600">
+            <div>{latitude.toFixed(6)}, {longitude.toFixed(6)}</div>
+            <div className="text-xs">
+              GPS fix: {formatTimeAgo(device.location_updated_at, nowMs)}
+              {Number.isFinite(Number(device.location_accuracy_m))
+                ? ` · about ${Math.round(Number(device.location_accuracy_m))} m accuracy`
+                : ''}
+            </div>
+            {mapImageUrl ? (
+              <div className="mt-3">
+                <Image
+                  src={mapImageUrl}
+                  alt={`Map showing ${device.name || 'device'} location`}
+                  width={800}
+                  height={450}
+                  unoptimized
+                  className="h-auto w-full rounded border border-gray-300"
+                />
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span>Map closes in {mapSecondsRemaining} seconds.</span>
+                  <button type="button" onClick={closeMap} className="font-semibold text-blue-700 hover:underline">
+                    Close map now
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={showMap}
+                disabled={mapLoading}
+                className="mt-2 rounded border border-blue-700 bg-white px-3 py-2 font-semibold text-blue-700 disabled:opacity-50"
+              >
+                {mapLoading ? 'Loading secure map…' : 'Show map for 60 seconds'}
+              </button>
+            )}
+            {mapError && <div className="mt-2 text-xs text-red-700" role="alert">{mapError}</div>}
+          </div>
+        ) : (
+          <div className="mt-1 text-gray-600">{locationMessage}</div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function formatHistoryValue(field: string, value: unknown) {
   if (value === null || value === undefined || value === '') return 'Not set';
@@ -109,6 +308,11 @@ export default function Devices() {
   const [pairingCodes, setPairingCodes] = useState<Record<string, { code: string; expiresAt: string }>>({});
   const [pairingBusyDeviceId, setPairingBusyDeviceId] = useState<string | null>(null);
   const [pairingErrors, setPairingErrors] = useState<Record<string, string>>({});
+  const [healthClock, setHealthClock] = useState(() => Date.now());
+  const [locationBusyDeviceId, setLocationBusyDeviceId] = useState<string | null>(null);
+  const [locationErrors, setLocationErrors] = useState<Record<string, string>>({});
+
+  const deviceIdsKey = devices.map(device => device.id).sort().join(',');
 
   const loadProfile = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -293,6 +497,76 @@ max_amount: cfg?.max_amount || 100,
     return () => window.clearTimeout(timer);
   }, [loadDevices, profile]);
 
+  async function requestDeviceLocation(deviceId: string) {
+    setLocationBusyDeviceId(deviceId);
+    setLocationErrors(current => ({ ...current, [deviceId]: '' }));
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Please sign in again.');
+
+      const response = await fetch('/api/dashboard/devices/location', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ deviceId })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'The GPS request could not be sent.');
+
+      setDevices(current => current.map(device => device.id === deviceId
+        ? {
+            ...device,
+            location_refresh_requested_at: payload.request?.location_refresh_requested_at,
+            location_refresh_status: payload.request?.location_refresh_status ?? 'pending'
+          }
+        : device));
+    } catch (error) {
+      setLocationErrors(current => ({
+        ...current,
+        [deviceId]: error instanceof Error ? error.message : 'The GPS request could not be sent.'
+      }));
+    } finally {
+      setLocationBusyDeviceId(null);
+    }
+  }
+
+  useEffect(() => {
+    if (!deviceIdsKey) return;
+    let active = true;
+    const deviceIds = deviceIdsKey.split(',');
+
+    const refreshHealth = async () => {
+      const { data, error } = await supabase
+        .from('devices')
+        .select('id, last_seen_at, location_latitude, location_longitude, location_accuracy_m, location_provider, location_updated_at, location_permission_granted, location_service_enabled, location_refresh_requested_at, location_refresh_status, location_refresh_status_updated_at, app_version')
+        .in('id', deviceIds);
+
+      if (!active) return;
+      setHealthClock(Date.now());
+      if (error) {
+        console.error('Device health refresh failed:', error);
+        return;
+      }
+
+      const healthById = new Map((data || []).map(health => [health.id, health]));
+      setDevices(current => current.map(device => ({
+        ...device,
+        ...(healthById.get(device.id) || {})
+      })));
+    };
+
+    void refreshHealth();
+    const refreshInterval = window.setInterval(() => void refreshHealth(), 10_000);
+    const clockInterval = window.setInterval(() => setHealthClock(Date.now()), 5_000);
+    return () => {
+      active = false;
+      window.clearInterval(refreshInterval);
+      window.clearInterval(clockInterval);
+    };
+  }, [deviceIdsKey]);
+
   async function loadHistory(deviceId: string) {
     setHistoryLoadingDeviceId(deviceId);
     setHistoryErrors(current => ({ ...current, [deviceId]: '' }));
@@ -464,6 +738,15 @@ async function saveConfig(device: any) {
                 <div className="text-sm text-gray-500">{d.merchant_name}</div>
               )}
             </div>
+
+            <DeviceHealthPanel
+              device={d}
+              nowMs={healthClock}
+              canControlLocation={profile?.role !== 'sales_rep'}
+              locationBusy={locationBusyDeviceId === d.id}
+              locationError={locationErrors[d.id]}
+              onRequestLocation={() => requestDeviceLocation(d.id)}
+            />
 
             {/* CONFIG ONLY */}
 
