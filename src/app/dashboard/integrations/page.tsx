@@ -21,6 +21,24 @@ type MerchantOption = {
   integration: IntegrationStatus | null;
 };
 
+type PledgerIntegrationStatus = {
+  configured: boolean;
+  token_hint: string;
+  tax_id_hint: string;
+  charity_name: string | null;
+  status: string;
+  last_verified_at: string | null;
+  last_verification_error: string | null;
+  updated_at: string;
+};
+
+type PledgerMerchantOption = {
+  id: string;
+  name: string;
+  status: string;
+  integration: PledgerIntegrationStatus | null;
+};
+
 export default function MerchantIntegrationsPage() {
   const [role, setRole] = useState('merchant');
   const [merchants, setMerchants] = useState<MerchantOption[]>([]);
@@ -250,6 +268,236 @@ export default function MerchantIntegrationsPage() {
           </div>
         </section>
       )}
+
+      <PledgerIntegrationCard />
     </main>
+  );
+}
+
+function PledgerIntegrationCard() {
+  const [role, setRole] = useState('merchant');
+  const [merchants, setMerchants] = useState<PledgerMerchantOption[]>([]);
+  const [merchantId, setMerchantId] = useState('');
+  const [apiToken, setApiToken] = useState('');
+  const [taxId, setTaxId] = useState('');
+  const [charityName, setCharityName] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
+  const authenticatedFetch = useCallback(async (url: string, options: RequestInit = {}) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Please sign in again.');
+    return fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        Authorization: `Bearer ${session.access_token}`
+      },
+      cache: 'no-store'
+    });
+  }, []);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const response = await authenticatedFetch('/api/dashboard/integrations/pledger');
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Pledger setup could not be loaded.');
+      const options = (payload.merchants ?? []) as PledgerMerchantOption[];
+      setRole(payload.role || 'merchant');
+      setMerchants(options);
+      setMerchantId((current) => options.some((merchant) => merchant.id === current)
+        ? current
+        : options[0]?.id || '');
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Pledger setup could not be loaded.');
+    } finally {
+      setLoading(false);
+    }
+  }, [authenticatedFetch]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
+
+  const selectedMerchant = useMemo(
+    () => merchants.find((merchant) => merchant.id === merchantId) ?? null,
+    [merchantId, merchants]
+  );
+  const integration = selectedMerchant?.integration;
+  const canSave = Boolean(
+    merchantId
+    && apiToken.trim()
+    && /^\d{9}$/.test(taxId)
+    && charityName.trim()
+  );
+
+  function clearForm() {
+    setApiToken('');
+    setTaxId('');
+    setCharityName('');
+  }
+
+  function selectMerchant(value: string) {
+    setMerchantId(value);
+    setError('');
+    setNotice('');
+    clearForm();
+  }
+
+  async function save() {
+    if (!canSave) return;
+    setSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      const response = await authenticatedFetch('/api/dashboard/integrations/pledger', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          merchant_id: merchantId,
+          api_token: apiToken,
+          tax_id: taxId,
+          charity_name: charityName
+        })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Pledger credentials could not be saved.');
+      setMerchants((current) => current.map((merchant) => merchant.id === merchantId
+        ? { ...merchant, integration: payload.integration }
+        : merchant));
+      clearForm();
+      setNotice('Pledger credentials were saved securely. The API token will not be displayed again.');
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Pledger credentials could not be saved.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function disconnect() {
+    if (!merchantId || !window.confirm('Disconnect Pledger and permanently remove the saved credentials?')) return;
+    setDisconnecting(true);
+    setError('');
+    setNotice('');
+    try {
+      const response = await authenticatedFetch('/api/dashboard/integrations/pledger', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ merchant_id: merchantId })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Pledger could not be disconnected.');
+      setMerchants((current) => current.map((merchant) => merchant.id === merchantId
+        ? { ...merchant, integration: null }
+        : merchant));
+      clearForm();
+      setNotice('Pledger was disconnected and the saved credentials were removed.');
+    } catch (disconnectError) {
+      setError(disconnectError instanceof Error ? disconnectError.message : 'Pledger could not be disconnected.');
+    } finally {
+      setDisconnecting(false);
+    }
+  }
+
+  if (loading) {
+    return <section className="mt-8 rounded-2xl border bg-white p-6 shadow-sm">Loading Pledger setup...</section>;
+  }
+  if (!merchants.length && !error) return null;
+
+  return (
+    <section className="mt-8 rounded-2xl border bg-white p-6 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-semibold">Pledger</h2>
+          <p className="mt-1 text-sm text-gray-600">Connect the charity account used for Pledger card donations.</p>
+        </div>
+        <span className={`rounded-full px-3 py-1 text-xs font-bold uppercase ${integration?.configured ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-900'}`}>
+          {integration?.configured ? integration.status : 'Not configured'}
+        </span>
+      </div>
+
+      {error && <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800" role="alert">{error}</div>}
+      {notice && <div className="mt-6 rounded-xl border border-green-200 bg-green-50 p-4 text-green-800">{notice}</div>}
+
+      {(role === 'admin' || role === 'super_admin') && merchants.length > 0 && (
+        <label className="mt-6 block text-sm font-medium">
+          Merchant
+          <select value={merchantId} onChange={(event) => selectMerchant(event.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal">
+            {merchants.map((merchant) => <option key={merchant.id} value={merchant.id}>{merchant.name}</option>)}
+          </select>
+        </label>
+      )}
+
+      {integration?.configured && (
+        <div className="mt-6 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-950">
+          <div className="font-semibold">Saved Pledger connection</div>
+          <div className="mt-2 grid gap-1 sm:grid-cols-2">
+            <div>API token: {integration.token_hint || 'saved'}</div>
+            <div>{integration.tax_id_hint || 'Tax ID saved'}</div>
+            <div className="sm:col-span-2">Charity: {integration.charity_name || 'saved'}</div>
+          </div>
+          <p className="mt-2 text-xs">Enter all three fields below to replace the saved credentials.</p>
+        </div>
+      )}
+
+      <div className="mt-6 grid gap-4">
+        <label className="text-sm font-medium">
+          Pledger Bearer API token
+          <input
+            type="password"
+            value={apiToken}
+            onChange={(event) => setApiToken(event.target.value)}
+            autoComplete="off"
+            maxLength={2048}
+            placeholder={integration?.configured ? 'Enter API token again to update' : 'Bearer API token'}
+            className="mt-1 w-full rounded-lg border px-3 py-2 font-normal"
+          />
+        </label>
+        <label className="text-sm font-medium">
+          Charity tax ID
+          <input
+            value={taxId}
+            onChange={(event) => setTaxId(event.target.value.replace(/\D/g, '').slice(0, 9))}
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={9}
+            placeholder="9 digits"
+            className="mt-1 w-full rounded-lg border px-3 py-2 font-normal"
+          />
+        </label>
+        <label className="text-sm font-medium">
+          Charity name registered with Pledger
+          <input
+            value={charityName}
+            onChange={(event) => setCharityName(event.target.value)}
+            autoComplete="organization"
+            maxLength={254}
+            placeholder="Charity name"
+            className="mt-1 w-full rounded-lg border px-3 py-2 font-normal"
+          />
+        </label>
+      </div>
+
+      <div className="mt-6 flex flex-wrap gap-3">
+        <button type="button" onClick={() => void save()} disabled={!canSave || saving || disconnecting} className="rounded-lg bg-blue-700 px-5 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
+          {saving ? 'Saving securely...' : integration?.configured ? 'Replace Pledger credentials' : 'Save Pledger credentials'}
+        </button>
+        {integration?.configured && (
+          <button type="button" onClick={() => void disconnect()} disabled={saving || disconnecting} className="rounded-lg border border-red-300 px-5 py-2 font-semibold text-red-700 disabled:opacity-50">
+            {disconnecting ? 'Disconnecting...' : 'Disconnect Pledger'}
+          </button>
+        )}
+      </div>
+
+      <div className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
+        The API token and tax ID stay on Gimml&apos;s protected server. They are never sent to the Datecs device or displayed again.
+      </div>
+    </section>
   );
 }
