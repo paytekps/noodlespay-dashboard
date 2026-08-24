@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createServiceClient } from '../../../../lib/server-supabase';
 
 const validPlans = new Set(['basic', 'pro', 'premium']);
-const validProcessorPreferences = new Set(['existing_account', 'fiserv_rapid_connect', 'stripe_terminal', 'help_me_choose']);
+const validProcessorPreferences = new Set(['existing_account', 'fiserv_rapid_connect', 'tsys_sierra', 'stripe_terminal', 'help_me_choose']);
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function text(value: unknown, max: number) {

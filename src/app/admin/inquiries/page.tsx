@@ -8,6 +8,7 @@ type Inquiry = { id: string; created_at: string; inquiry_type: 'contact' | 'orde
 const processorLabels: Record<string, string> = {
   existing_account: 'Keep existing merchant account',
   fiserv_rapid_connect: 'Fiserv Rapid Connect',
+  tsys_sierra: 'TSYS / Global Payments — Sierra',
   stripe_terminal: 'Stripe Terminal — compatible Stripe hardware required',
   help_me_choose: 'Help merchant choose'
 };
