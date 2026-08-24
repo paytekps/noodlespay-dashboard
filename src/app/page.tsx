@@ -4,7 +4,7 @@ const benefits = [
   ['One tap or insert', 'Accept a donation or payment without making the cardholder navigate a checkout screen.'],
   ['Built for unattended giving', 'Keep the amount ready on screen so a cardholder can pay immediately.'],
   ['Managed from anywhere', 'Control device amounts, plan features, merchant access, and reporting from the Gimml dashboard.'],
-  ['Processor-agnostic by design', 'Keep your existing merchant account when its processor and platform are supported and certified for your Gimml hardware.']
+  ['Works with existing merchant accounts', 'Keep your merchant account when it can be boarded through Fiserv Rapid Connect or TSYS / Global Payments — Sierra for the BlueCash-05.']
 ];
 
 export default function HomePage() {

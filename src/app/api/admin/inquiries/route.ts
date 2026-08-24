@@ -20,7 +20,7 @@ async function adminContext(req: Request) {
 export async function GET(req: Request) {
   const context = await adminContext(req);
   if ('error' in context) return NextResponse.json({ error: context.error }, { status: context.status });
-  const { data, error } = await context.admin.from('inquiries').select('id, created_at, updated_at, inquiry_type, status, full_name, email, phone, organization, plan, processor_preference, current_processor_name, quantity, message, shipping_address, shipping_city, shipping_state, shipping_postal_code, shipping_country, admin_notes, payment_status').order('created_at', { ascending: false }).limit(500);
+  const { data, error } = await context.admin.from('inquiries').select('id, created_at, updated_at, inquiry_type, status, full_name, email, phone, organization, plan, merchant_account_preference, processor_preference, current_processor_name, quantity, message, shipping_address, shipping_city, shipping_state, shipping_postal_code, shipping_country, admin_notes, payment_status').order('created_at', { ascending: false }).limit(500);
   if (error) return NextResponse.json({ error: 'Inquiries could not be loaded.' }, { status: 500 });
   return NextResponse.json({ inquiries: data ?? [] });
 }
