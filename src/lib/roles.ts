@@ -28,6 +28,7 @@ export function canAccessPath(role: UserRole, pathname: string) {
   if (role === 'super_admin' || role === 'admin') {
     return pathname.startsWith('/admin') ||
       pathname.startsWith('/dashboard/devices') ||
+      pathname.startsWith('/dashboard/integrations') ||
       pathname.startsWith('/dashboard/settlements') ||
       pathname.startsWith('/transactions');
   }
@@ -41,6 +42,7 @@ export function canAccessPath(role: UserRole, pathname: string) {
 
   return pathname === '/dashboard' ||
     pathname.startsWith('/dashboard/devices') ||
+    pathname.startsWith('/dashboard/integrations') ||
     pathname.startsWith('/dashboard/settlements') ||
     pathname.startsWith('/transactions');
 }
