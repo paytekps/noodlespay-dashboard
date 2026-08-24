@@ -109,21 +109,21 @@ export default function MerchantIntegrationsPage() {
         })
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || 'OJC credentials could not be saved.');
+      if (!response.ok) throw new Error(payload.error || 'The OJC Fund credentials could not be saved.');
       setMerchants((current) => current.map((merchant) => merchant.id === merchantId
         ? { ...merchant, integration: payload.integration }
         : merchant));
       clearForm();
-      setNotice('OJC credentials saved securely. The password will not be displayed again.');
+      setNotice('The OJC Fund credentials were saved securely. The password will not be displayed again.');
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'OJC credentials could not be saved.');
+      setError(saveError instanceof Error ? saveError.message : 'The OJC Fund credentials could not be saved.');
     } finally {
       setSaving(false);
     }
   }
 
   async function disconnect() {
-    if (!merchantId || !window.confirm('Disconnect OJC and permanently remove the saved credentials?')) return;
+    if (!merchantId || !window.confirm('Disconnect The OJC Fund and permanently remove the saved credentials?')) return;
     setDisconnecting(true);
     setError('');
     setNotice('');
@@ -134,14 +134,14 @@ export default function MerchantIntegrationsPage() {
         body: JSON.stringify({ merchant_id: merchantId })
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || 'OJC could not be disconnected.');
+      if (!response.ok) throw new Error(payload.error || 'The OJC Fund could not be disconnected.');
       setMerchants((current) => current.map((merchant) => merchant.id === merchantId
         ? { ...merchant, integration: null }
         : merchant));
       clearForm();
-      setNotice('OJC disconnected and the saved credentials were removed.');
+      setNotice('The OJC Fund was disconnected and the saved credentials were removed.');
     } catch (disconnectError) {
-      setError(disconnectError instanceof Error ? disconnectError.message : 'OJC could not be disconnected.');
+      setError(disconnectError instanceof Error ? disconnectError.message : 'The OJC Fund could not be disconnected.');
     } finally {
       setDisconnecting(false);
     }
@@ -167,7 +167,7 @@ export default function MerchantIntegrationsPage() {
         <section className="mt-8 rounded-2xl border bg-white p-6 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h2 className="text-xl font-semibold">OJC Charity Card</h2>
+              <h2 className="text-xl font-semibold">The OJC Fund</h2>
               <p className="mt-1 text-sm text-gray-600">Credentials are encrypted before they are stored.</p>
             </div>
             <span className={`rounded-full px-3 py-1 text-xs font-bold uppercase ${integration?.configured ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-900'}`}>
@@ -186,7 +186,7 @@ export default function MerchantIntegrationsPage() {
 
           {integration?.configured && (
             <div className="mt-6 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-950">
-              <div className="font-semibold">Saved OJC connection</div>
+              <div className="font-semibold">Saved connection for The OJC Fund</div>
               <div className="mt-2 grid gap-1 sm:grid-cols-2">
                 <div>Username: {integration.username_hint || 'saved'}</div>
                 <div>Organization credential: {integration.organization_hint || 'saved'}</div>
@@ -197,50 +197,50 @@ export default function MerchantIntegrationsPage() {
 
           <div className="mt-6 grid gap-4">
             <label className="text-sm font-medium">
-              OJC username
+              The OJC Fund username
               <input
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
                 autoComplete="username"
                 maxLength={254}
-                placeholder={integration?.configured ? 'Enter username again to update' : 'OJC username'}
+                placeholder={integration?.configured ? 'Enter username again to update' : 'The OJC Fund username'}
                 className="mt-1 w-full rounded-lg border px-3 py-2 font-normal"
               />
             </label>
             <label className="text-sm font-medium">
-              OJC password
+              The OJC Fund password
               <input
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 autoComplete="current-password"
                 maxLength={512}
-                placeholder={integration?.configured ? 'Enter password again to update' : 'OJC password'}
+                placeholder={integration?.configured ? 'Enter password again to update' : 'The OJC Fund password'}
                 className="mt-1 w-full rounded-lg border px-3 py-2 font-normal"
               />
             </label>
             <label className="text-sm font-medium">
-              OJC organization ID / API key
+              The OJC Fund organization ID / API key
               <input
                 type="password"
                 value={organizationId}
                 onChange={(event) => setOrganizationId(event.target.value)}
                 autoComplete="off"
                 maxLength={500}
-                placeholder="Value supplied by OJC"
+                placeholder="Value supplied by The OJC Fund"
                 className="mt-1 w-full rounded-lg border px-3 py-2 font-normal"
               />
-              <span className="mt-1 block text-xs font-normal text-gray-500">This is the organization value OJC requires when processing and voiding transactions.</span>
+              <span className="mt-1 block text-xs font-normal text-gray-500">This is the organization value The OJC Fund requires when processing and voiding transactions.</span>
             </label>
           </div>
 
           <div className="mt-6 flex flex-wrap gap-3">
             <button type="button" onClick={() => void save()} disabled={!canSave || saving || disconnecting} className="rounded-lg bg-blue-700 px-5 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
-              {saving ? 'Saving securely...' : integration?.configured ? 'Replace OJC credentials' : 'Save OJC credentials'}
+              {saving ? 'Saving securely...' : integration?.configured ? 'Replace The OJC Fund credentials' : 'Save The OJC Fund credentials'}
             </button>
             {integration?.configured && (
               <button type="button" onClick={() => void disconnect()} disabled={saving || disconnecting} className="rounded-lg border border-red-300 px-5 py-2 font-semibold text-red-700 disabled:opacity-50">
-                {disconnecting ? 'Disconnecting...' : 'Disconnect OJC'}
+                {disconnecting ? 'Disconnecting...' : 'Disconnect The OJC Fund'}
               </button>
             )}
           </div>

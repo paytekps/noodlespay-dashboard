@@ -103,7 +103,7 @@ export async function GET(req: Request) {
       .in('merchant_id', merchantIds);
     if (error) {
       console.error('OJC integration status lookup failed:', error.code);
-      return json({ error: 'OJC setup status could not be loaded.' }, 500);
+      return json({ error: 'The OJC Fund setup status could not be loaded.' }, 500);
     }
     integrations = (data ?? []) as MerchantIntegration[];
   }
@@ -138,13 +138,13 @@ export async function PUT(req: Request) {
     : '';
 
   if (!username || username.length > 254 || /[\u0000-\u001f\u007f]/.test(username)) {
-    return json({ error: 'Enter a valid OJC username.' }, 400);
+    return json({ error: 'Enter a valid username for The OJC Fund.' }, 400);
   }
   if (!password || password.length > 512 || /[\u0000-\u001f\u007f]/.test(password)) {
-    return json({ error: 'Enter a valid OJC password.' }, 400);
+    return json({ error: 'Enter a valid password for The OJC Fund.' }, 400);
   }
   if (!organizationId || organizationId.length > 500 || /[\u0000-\u001f\u007f]/.test(organizationId)) {
-    return json({ error: 'Enter the OJC organization ID or API key.' }, 400);
+    return json({ error: 'Enter The OJC Fund organization ID or API key.' }, 400);
   }
 
   const { data, error } = await context.admin.rpc('store_merchant_ojc_credential', {
@@ -156,7 +156,7 @@ export async function PUT(req: Request) {
   });
   if (error) {
     console.error('OJC credential save failed:', error.code);
-    return json({ error: 'The OJC credentials could not be saved securely.' }, 500);
+    return json({ error: 'The OJC Fund credentials could not be saved securely.' }, 500);
   }
 
   return json({
@@ -183,7 +183,7 @@ export async function DELETE(req: Request) {
   });
   if (error) {
     console.error('OJC credential disconnect failed:', error.code);
-    return json({ error: 'The OJC connection could not be removed.' }, 500);
+    return json({ error: 'The OJC Fund connection could not be removed.' }, 500);
   }
 
   return json({ success: true });
