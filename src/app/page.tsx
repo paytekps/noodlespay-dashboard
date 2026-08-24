@@ -3,7 +3,8 @@ import Link from 'next/link';
 const benefits = [
   ['One tap or insert', 'Accept a donation or payment without making the cardholder navigate a checkout screen.'],
   ['Built for unattended giving', 'Keep the amount ready on screen so a cardholder can pay immediately.'],
-  ['Managed from anywhere', 'Control device amounts, plan features, merchant access, and reporting from the Gimml dashboard.']
+  ['Managed from anywhere', 'Control device amounts, plan features, merchant access, and reporting from the Gimml dashboard.'],
+  ['Processor-agnostic by design', 'Keep your existing merchant account when its processor and platform are supported and certified for your Gimml hardware.']
 ];
 
 export default function HomePage() {
@@ -20,7 +21,7 @@ export default function HomePage() {
       <section className="px-6 py-20"><div className="mx-auto max-w-6xl">
         <p className="text-sm font-bold uppercase tracking-widest text-emerald-700">Made to stay ready</p>
         <h2 className="mt-3 max-w-2xl text-4xl font-black tracking-tight">No app download. No amount entry. No complicated checkout.</h2>
-        <div className="mt-10 grid gap-5 md:grid-cols-3">{benefits.map(([title, description]) => <div key={title} className="rounded-2xl border bg-white p-7 shadow-sm"><div className="mb-5 flex h-11 w-11 items-center justify-center rounded-full bg-emerald-100 text-xl font-black text-emerald-800">✓</div><h3 className="text-xl font-bold">{title}</h3><p className="mt-3 leading-7 text-gray-600">{description}</p></div>)}</div>
+        <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-4">{benefits.map(([title, description]) => <div key={title} className="rounded-2xl border bg-white p-7 shadow-sm"><div className="mb-5 flex h-11 w-11 items-center justify-center rounded-full bg-emerald-100 text-xl font-black text-emerald-800">✓</div><h3 className="text-xl font-bold">{title}</h3><p className="mt-3 leading-7 text-gray-600">{description}</p></div>)}</div>
       </div></section>
       <section className="bg-emerald-50 px-6 py-20"><div className="mx-auto flex max-w-6xl flex-col justify-between gap-8 md:flex-row md:items-center"><div><h2 className="text-4xl font-black tracking-tight">Ready when your supporters are.</h2><p className="mt-3 max-w-2xl text-gray-700">Choose the controls your organization needs and manage every Gimml device from one secure dashboard.</p></div><Link href="/pricing" className="shrink-0 rounded-lg bg-gray-950 px-6 py-3 text-center font-bold text-white hover:bg-gray-800">Compare plans</Link></div></section>
     </main>

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createServiceClient } from '../../../../lib/server-supabase';
 
 const validPlans = new Set(['basic', 'pro', 'premium']);
+const validProcessorPreferences = new Set(['existing_account', 'fiserv_rapid_connect', 'stripe_terminal', 'help_me_choose']);
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function text(value: unknown, max: number) {
@@ -17,9 +18,10 @@ export async function POST(req: Request) {
   const fullName = text(body.fullName, 120);
   const email = text(body.email, 254).toLowerCase();
   const plan = validPlans.has(body.plan) ? body.plan : null;
+  const processorPreference = validProcessorPreferences.has(body.processorPreference) ? body.processorPreference : null;
   const quantity = Number(body.quantity);
   if (!fullName || !emailPattern.test(email)) return NextResponse.json({ error: 'Enter your name and a valid email address.' }, { status: 400 });
-  if (inquiryType === 'order_request' && (!plan || !Number.isInteger(quantity) || quantity < 1 || quantity > 100)) return NextResponse.json({ error: 'Select a plan and a device quantity from 1 to 100.' }, { status: 400 });
+  if (inquiryType === 'order_request' && (!plan || !processorPreference || !Number.isInteger(quantity) || quantity < 1 || quantity > 100)) return NextResponse.json({ error: 'Select a plan, payment-processing preference, and a device quantity from 1 to 100.' }, { status: 400 });
 
   try {
     const admin = createServiceClient();
@@ -34,6 +36,8 @@ export async function POST(req: Request) {
       phone: text(body.phone, 40) || null,
       organization: text(body.organization, 160) || null,
       plan,
+      processor_preference: inquiryType === 'order_request' ? processorPreference : null,
+      current_processor_name: inquiryType === 'order_request' ? text(body.currentProcessorName, 120) || null : null,
       quantity: inquiryType === 'order_request' ? quantity : null,
       message: text(body.message, 3000) || null,
       shipping_address: text(body.shippingAddress, 250) || null,
