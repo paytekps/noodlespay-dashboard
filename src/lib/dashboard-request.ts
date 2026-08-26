@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { SupabaseClient, User } from '@supabase/supabase-js';
-import { createServiceClient } from './server-supabase';
+import { createServiceClient, createUserRequestClient } from './server-supabase';
 import type { UserRole } from './roles';
 import { isUserRole } from './roles';
 
@@ -30,7 +30,14 @@ export async function dashboardRequestContext(
     return { error: 'Your session could not be verified.', status: 401 };
   }
 
-  const { data: profile, error: profileError } = await admin
+  let requestClient: SupabaseClient;
+  try {
+    requestClient = createUserRequestClient(token);
+  } catch {
+    return { error: 'Dashboard access is not configured.', status: 503 };
+  }
+
+  const { data: profile, error: profileError } = await requestClient
     .from('profiles')
     .select('role, merchant_id')
     .eq('id', user.id)
