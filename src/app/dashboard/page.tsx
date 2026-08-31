@@ -8,6 +8,7 @@ export default function MerchantHome() {
       <p className="mt-2 text-gray-600">Your devices, settings, and payment activity in one place.</p>
       <DashboardOverview showMerchantCount={false} />
       <div className="mt-8 grid gap-4 md:grid-cols-2">
+        <Link href="/dashboard/terminal" className="rounded-xl border bg-white p-6 shadow-sm"><h2 className="text-xl font-semibold">My Gimml Terminal plan</h2><p className="mt-2 text-sm text-gray-600">See your profile, compatible features, prices, and device assignments.</p></Link>
         <Link href="/dashboard/devices" className="rounded-xl border bg-white p-6 shadow-sm"><h2 className="text-xl font-semibold">My devices</h2><p className="mt-2 text-sm text-gray-600">Change the settings allowed by your purchased plan.</p></Link>
         <Link href="/dashboard/integrations" className="rounded-xl border bg-white p-6 shadow-sm"><h2 className="text-xl font-semibold">Closed-loop connections</h2><p className="mt-2 text-sm text-gray-600">Securely connect The OJC Fund and other supported card programs.</p></Link>
         <Link href="/transactions" className="rounded-xl border bg-white p-6 shadow-sm"><h2 className="text-xl font-semibold">My transactions</h2><p className="mt-2 text-sm text-gray-600">Review and export your organization’s transactions.</p></Link>
