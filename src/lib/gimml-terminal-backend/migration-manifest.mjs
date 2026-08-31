@@ -1,0 +1,4 @@
+import {createHash} from 'node:crypto';import {readdirSync,readFileSync} from 'node:fs';import {join} from 'node:path';
+
+/** Produces the ordered, checksummed migration manifest used by deployment and rollback review. */
+export function migrationManifest(directory){const names=readdirSync(directory).filter(name=>/^\d{3}_[a-z0-9_]+\.sql$/.test(name)).sort();const seen=new Set();return names.map((name,index)=>{const sequence=Number(name.slice(0,3));if(seen.has(sequence)||sequence!==index+1)throw new Error(`Migration sequence gap or duplicate at ${name}`);seen.add(sequence);const sql=readFileSync(join(directory,name),'utf8');if(/\bdrop\s+(schema|table)\b/i.test(sql))throw new Error(`Destructive migration is forbidden: ${name}`);return {sequence,name,sha256:createHash('sha256').update(sql).digest('hex')};});}

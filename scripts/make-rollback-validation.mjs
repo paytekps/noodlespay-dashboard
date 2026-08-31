@@ -1,0 +1,10 @@
+import {mkdir,readFile,writeFile} from 'node:fs/promises';
+import {dirname,resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
+const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
+const source=resolve(root,'supabase/migrations/20260831193645_gimml_terminal_platform.sql');
+const target=resolve(root,'supabase/.temp/gimml-terminal-rollback-validation.sql');
+const sql=await readFile(source,'utf8');
+const transactional=sql.replace(/^\s*begin;\s*$/gim,'').replace(/^\s*commit;\s*$/gim,'');
+await mkdir(dirname(target),{recursive:true});
+await writeFile(target,`begin;\n${transactional}\nrollback;\n`,'utf8');

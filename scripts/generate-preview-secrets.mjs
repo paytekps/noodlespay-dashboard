@@ -1,0 +1,10 @@
+import {generateKeyPairSync,randomBytes} from 'node:crypto';
+import {mkdir,writeFile} from 'node:fs/promises';
+import {dirname,resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
+const root=resolve(dirname(fileURLToPath(import.meta.url)),'..','.gimml-secrets');
+await mkdir(root,{recursive:true});
+const pair=generateKeyPairSync('ec',{namedCurve:'prime256v1'});
+await writeFile(resolve(root,'response-private.txt'),pair.privateKey.export({format:'der',type:'pkcs8'}).toString('base64'));
+await writeFile(resolve(root,'response-public.txt'),pair.publicKey.export({format:'der',type:'spki'}).toString('base64'));
+await writeFile(resolve(root,'pairing-pepper.txt'),randomBytes(48).toString('base64'));
