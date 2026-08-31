@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { createHmac, randomBytes } from 'node:crypto';
 import { dashboardRequestContext } from '../../../../lib/dashboard-request';
 
 async function contextFor(req: Request) {
@@ -94,6 +95,33 @@ export async function POST(req: Request) {
     }
   }
   return NextResponse.json({ saved: true });
+}
+
+export async function DELETE(req: Request) {
+  const context = await contextFor(req);
+  if ('error' in context) return NextResponse.json({ error: context.error }, { status: context.status });
+  if (context.role !== 'super_admin' && context.role !== 'admin') return NextResponse.json({ error: 'Administrator access is required to create pairing codes.' }, { status: 403 });
+  const body = await req.json().catch(() => ({}));
+  const deviceId = typeof body.deviceId === 'string' ? body.deviceId : '';
+  const applicationId = typeof body.applicationId === 'string' ? body.applicationId : '';
+  const certificate = typeof body.signingCertificateSha256 === 'string' ? body.signingCertificateSha256.toLowerCase() : '';
+  if (!/^[0-9a-f-]{36}$/i.test(deviceId) || !/^com\.gimml\.terminal(?:\.debug)?$/.test(applicationId) || !/^[a-f0-9]{64}$/.test(certificate)) return NextResponse.json({ error: 'The app identity is invalid.' }, { status: 400 });
+  const pepper = process.env.GIMML_PAIRING_PEPPER;
+  if (!pepper || pepper.length < 32) return NextResponse.json({ error: 'Pairing is not configured.' }, { status: 503 });
+  const terminal = context.admin.schema('gimml_terminal');
+  const { data: device } = await terminal.from('devices').select('id, serial_number').eq('id', deviceId).maybeSingle();
+  if (!device) return NextResponse.json({ error: 'Device not found.' }, { status: 404 });
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const code = [...randomBytes(12)].map(value => alphabet[value % alphabet.length]).join('');
+  const digest = createHmac('sha256', pepper).update(`${device.serial_number}\n${code}`).digest('hex');
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  await terminal.from('device_pairing_codes').update({ consumed_at: new Date().toISOString() }).eq('device_id', deviceId).is('consumed_at', null);
+  const { error } = await terminal.from('device_pairing_codes').insert({ id: crypto.randomUUID(), device_id: deviceId, code_digest: `\\x${digest}`, expires_at: expiresAt, expected_application_id: applicationId, expected_signing_cert_sha256: `\\x${certificate}` });
+  if (error) {
+    console.error('Unified terminal pairing creation failed:', error);
+    return NextResponse.json({ error: 'Pairing code could not be created.' }, { status: 500 });
+  }
+  return NextResponse.json({ pairingCode: code, expiresAt });
 }
 
 export async function PATCH(req: Request) {
