@@ -64,6 +64,7 @@ export function createTerminalHttpHandler({repository,responsePrivateKeyDerBase6
       }
       throw new Error('Route not implemented');
     }catch(error){
+      console.error('Terminal request rejected:',error instanceof Error?error.message:'Unknown terminal request error');
       const message=['Request too large','JSON object required'].includes(error.message)?error.message:'Request rejected';
       return signed(400,json({error:message}),responsePrivateKeyDerBase64);
     }
