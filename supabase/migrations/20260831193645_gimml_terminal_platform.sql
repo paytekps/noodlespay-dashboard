@@ -32,6 +32,7 @@ grant usage,select on all sequences in schema gimml_terminal to service_role;
 alter default privileges in schema gimml_terminal revoke all on tables from public,anon,authenticated;
 alter default privileges in schema gimml_terminal grant select,insert,update,delete on tables to service_role;
 alter default privileges in schema gimml_terminal grant usage,select on sequences to service_role;
+alter default privileges in schema gimml_terminal grant execute on functions to service_role;
 commit;
 
 -- composed-unified-migrations: 002-012
@@ -393,4 +394,7 @@ grant execute on function gimml_terminal.consume_pairing_code_and_enroll(text,by
 -- object to the server-side service role. Browser roles retain no schema access.
 alter role authenticator set pgrst.db_schemas='public,storage,graphql_public,gimml_terminal';
 notify pgrst,'reload config';
+
+grant execute on all functions in schema gimml_terminal to service_role;
+revoke execute on all functions in schema gimml_terminal from anon,authenticated;
 commit;
