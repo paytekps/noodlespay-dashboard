@@ -2,7 +2,8 @@ import { createHash, createPublicKey, verify } from 'node:crypto';
 
 export function canonicalRequest({ method, path, timestamp, nonce, body }) {
   if (!['GET', 'POST', 'PATCH'].includes(method)) throw new Error('Method not allowed');
-  if (!['/device/login','/device/enroll','/device/commands','/device/command-result','/device/status','/transaction/create'].includes(path)) throw new Error('Path not allowed');
+  const allowed=['/device/login','/device/enroll','/device/commands','/device/command-result','/device/status','/transaction/create'];
+  if (!allowed.includes(path) && !allowed.some(item=>`/api/v2${item}`===path)) throw new Error('Path not allowed');
   if (!/^[A-Za-z0-9_-]{22,64}$/.test(nonce)) throw new Error('Invalid nonce');
   const bodyHash = createHash('sha256').update(body).digest('base64');
   return Buffer.from(`${method}\n${path}\n${timestamp}\n${nonce}\n${bodyHash}`);
