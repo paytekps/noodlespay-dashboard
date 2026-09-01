@@ -32,7 +32,16 @@ export async function GET(req: Request) {
     console.error('Unified terminal dashboard load failed:', error);
     return NextResponse.json({ error: 'Unified terminal settings could not be loaded.' }, { status: 500 });
   }
-  return NextResponse.json({ capabilities: capabilities.data ?? [], merchants: merchants.data ?? [], plans: plans.data ?? [], entitlements: entitlements.data ?? [], transactions: transactions.data ?? [] });
+  const normalizedMerchants = (merchants.data ?? []).map(merchant => ({
+    ...merchant,
+    devices: (merchant.devices ?? []).map(device => ({
+      ...device,
+      device_profiles: Array.isArray(device.device_profiles)
+        ? device.device_profiles
+        : device.device_profiles ? [device.device_profiles] : []
+    }))
+  }));
+  return NextResponse.json({ capabilities: capabilities.data ?? [], merchants: normalizedMerchants, plans: plans.data ?? [], entitlements: entitlements.data ?? [], transactions: transactions.data ?? [] });
 }
 
 export async function PUT(req: Request) {
@@ -52,12 +61,16 @@ export async function PUT(req: Request) {
       && Number.isSafeInteger(settings.reset_seconds) && settings.reset_seconds >= 5 && settings.reset_seconds <= 300;
     if (!valid) return NextResponse.json({ error: 'Enter valid unified terminal settings.' }, { status: 400 });
     const terminal = context.admin.schema('gimml_terminal');
-    const { data: device } = await terminal.from('devices').select('id').eq('id', deviceId).maybeSingle();
+    const [{ data: device }, { data: deviceProfile }] = await Promise.all([
+      terminal.from('devices').select('id').eq('id', deviceId).maybeSingle(),
+      terminal.from('device_profiles').select('profile_key').eq('device_id', deviceId).maybeSingle()
+    ]);
     if (!device) return NextResponse.json({ error: 'Unified terminal not found.' }, { status: 404 });
+    const isMini = deviceProfile?.profile_key === 'GIMML_MINI';
     const normalized = {
-      default_cents: settings.default_cents,
+      default_cents: isMini ? 0 : settings.default_cents,
       preset_cents: settings.preset_cents,
-      increment_cents: settings.increment_cents,
+      increment_cents: isMini ? 0 : settings.increment_cents,
       maximum_cents: settings.maximum_cents,
       reset_seconds: settings.reset_seconds
     };
