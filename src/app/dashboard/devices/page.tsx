@@ -32,6 +32,16 @@ const moneyHistoryFields = new Set([
 
 const ONLINE_WINDOW_MS = 20_000;
 
+type UnifiedDevice = {
+  id: string;
+  merchantId: string;
+  merchantName: string;
+  serial_number: string;
+  enrollment_state: string;
+  last_seen_at?: string | null;
+  device_profiles?: { profile_key?: string; layout_key?: string } | null;
+};
+
 function formatTimeAgo(value: string | null | undefined, nowMs: number) {
   if (!value) return 'Never';
   const timestamp = Date.parse(value);
@@ -293,6 +303,8 @@ function getConfigErrors(device: any) {
 
 export default function Devices() {
   const [devices, setDevices] = useState<any[]>([]);
+  const [unifiedDevices, setUnifiedDevices] = useState<UnifiedDevice[]>([]);
+  const [unifiedDevicesError, setUnifiedDevicesError] = useState('');
   const [merchants, setMerchants] = useState<any[]>([]);
   const [selectedMerchant, setSelectedMerchant] = useState('');
   const [search, setSearch] = useState('');
@@ -356,6 +368,29 @@ export default function Devices() {
     });
 
     setTransactionsMap(map);
+  }, []);
+
+  const loadUnifiedDevices = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return;
+    const response = await fetch('/api/dashboard/terminal', {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+      cache: 'no-store'
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setUnifiedDevicesError(payload.error || 'Gimml Terminal devices could not be loaded.');
+      return;
+    }
+    const flattened = (payload.merchants ?? []).flatMap((merchant: any) =>
+      (merchant.devices ?? []).map((device: any) => ({
+        ...device,
+        merchantId: merchant.id,
+        merchantName: merchant.display_name
+      }))
+    );
+    setUnifiedDevices(flattened);
+    setUnifiedDevicesError('');
   }, []);
 
   const loadDevices = useCallback(async () => {
@@ -494,9 +529,11 @@ max_amount: cfg?.max_amount || 100,
 
   useEffect(() => {
     if (!profile) return;
-    const timer = window.setTimeout(() => void loadDevices(), 0);
-    return () => window.clearTimeout(timer);
-  }, [loadDevices, profile]);
+    const refresh = () => { void loadDevices(); void loadUnifiedDevices(); };
+    const timer = window.setTimeout(refresh, 0);
+    const interval = window.setInterval(refresh, 15_000);
+    return () => { window.clearTimeout(timer); window.clearInterval(interval); };
+  }, [loadDevices, loadUnifiedDevices, profile]);
 
   async function requestDeviceLocation(deviceId: string) {
     setLocationBusyDeviceId(deviceId);
@@ -691,6 +728,39 @@ async function saveConfig(device: any) {
           </select>
         </label>
       )}
+
+      <section className="mb-8 rounded-xl border border-blue-200 bg-blue-50 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-blue-950">Unified Gimml Terminal devices</h2>
+            <p className="mt-1 text-sm text-blue-900">Live devices running the new combined Gimml Terminal app.</p>
+          </div>
+          <Link href="/dashboard/terminal" className="rounded bg-blue-700 px-4 py-2 text-sm font-semibold text-white">
+            Manage profiles and features
+          </Link>
+        </div>
+        {unifiedDevicesError && <div className="mt-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">{unifiedDevicesError}</div>}
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {unifiedDevices
+            .filter(device => !selectedMerchant || device.merchantId === selectedMerchant)
+            .map(device => {
+              const lastSeen = device.last_seen_at ? Date.parse(device.last_seen_at) : Number.NaN;
+              const online = Number.isFinite(lastSeen) && healthClock - lastSeen <= ONLINE_WINDOW_MS;
+              return <div key={device.id} className="rounded-lg border border-blue-200 bg-white p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="font-semibold">Serial {device.serial_number}</div>
+                  <span className={`rounded-full px-2 py-1 text-xs font-semibold ${online ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>{online ? 'Connected' : 'Offline'}</span>
+                </div>
+                {profile?.role !== 'merchant' && <div className="mt-1 text-sm text-gray-600">{device.merchantName}</div>}
+                <div className="mt-2 text-sm text-gray-700">Profile: {device.device_profiles?.profile_key?.replace('GIMML_', '') || 'Not assigned'}</div>
+                <div className="mt-1 text-xs text-gray-500">Last seen: {formatTimeAgo(device.last_seen_at, healthClock)}</div>
+              </div>;
+            })}
+          {!unifiedDevicesError && unifiedDevices.filter(device => !selectedMerchant || device.merchantId === selectedMerchant).length === 0 && (
+            <div className="text-sm text-blue-900">No unified Gimml Terminal devices are assigned to this merchant.</div>
+          )}
+        </div>
+      </section>
 
       {/* SUMMARY */}
       <div className="grid gap-4 mb-8 sm:grid-cols-3">
