@@ -161,10 +161,10 @@ function DeviceHealthPanel({
             className={`h-2.5 w-2.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`}
             aria-hidden="true"
           />
-          <span className="font-semibold">{isOnline ? 'Online' : 'Offline'}</span>
+          <span className="font-semibold">Legacy app {isOnline ? 'online' : 'offline'}</span>
         </div>
         <div className="mt-1 text-sm text-gray-600">
-          Last seen: {formatTimeAgo(device.last_seen_at, nowMs)}
+          Original app last seen: {formatTimeAgo(device.last_seen_at, nowMs)}
         </div>
         {device.app_version && (
           <div className="mt-1 text-xs text-gray-500">App version {device.app_version}</div>
@@ -800,9 +800,12 @@ async function saveConfig(device: any) {
 
             <div>
               <div className="flex items-center justify-between gap-3">
-                <div className="font-semibold text-lg">{d.name}</div>
+                <div>
+                  <div className="font-semibold text-lg">{d.name}</div>
+                  <div className="text-xs font-medium text-amber-700">Original Mini/One app record — not the unified terminal</div>
+                </div>
                 <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold uppercase text-gray-600">
-                  {d.plan}
+                  Legacy · {d.plan}
                 </span>
               </div>
               {profile?.role !== 'merchant' && (
