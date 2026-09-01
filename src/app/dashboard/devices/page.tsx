@@ -39,7 +39,7 @@ type UnifiedDevice = {
   serial_number: string;
   enrollment_state: string;
   last_seen_at?: string | null;
-  device_profiles?: { profile_key?: string; layout_key?: string } | null;
+  device_profiles?: Array<{ profile_key?: string; layout_key?: string }> | null;
 };
 
 function formatTimeAgo(value: string | null | undefined, nowMs: number) {
@@ -706,6 +706,37 @@ async function saveConfig(device: any) {
     return;
   }
 
+  const unifiedDevice = unifiedDevices.find(candidate => candidate.serial_number === device.serial_number);
+  if (unifiedDevice) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      alert('Legacy settings were saved, but unified terminal sync requires you to sign in again.');
+      setSavingDeviceId(null);
+      return;
+    }
+    const miniProfile = unifiedDevice.device_profiles?.[0]?.profile_key === 'GIMML_MINI';
+    const response = await fetch('/api/dashboard/terminal', {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deviceId: unifiedDevice.id,
+        settings: {
+          default_cents: miniProfile ? 0 : Math.round(Number(device.default_amount) * 100),
+          preset_cents: [device.preset_1, device.preset_2, device.preset_3].map((amount: number) => Math.round(Number(amount) * 100)),
+          increment_cents: miniProfile ? 0 : Math.round(Number(device.step) * 100),
+          maximum_cents: Math.round(Number(device.max_amount) * 100),
+          reset_seconds: Number(device.reset_delay)
+        }
+      })
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      alert(payload.error || 'Legacy settings were saved, but the unified terminal could not be synchronized.');
+      setSavingDeviceId(null);
+      return;
+    }
+  }
+
   setSavingDeviceId(null);
   setSavedDeviceId(device.id);
   if (historyOpenDeviceId === device.id) await loadHistory(device.id);
@@ -752,7 +783,7 @@ async function saveConfig(device: any) {
                   <span className={`rounded-full px-2 py-1 text-xs font-semibold ${online ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>{online ? 'Connected' : 'Offline'}</span>
                 </div>
                 {profile?.role !== 'merchant' && <div className="mt-1 text-sm text-gray-600">{device.merchantName}</div>}
-                <div className="mt-2 text-sm text-gray-700">Profile: {device.device_profiles?.profile_key?.replace('GIMML_', '') || 'Not assigned'}</div>
+                <div className="mt-2 text-sm text-gray-700">Profile: {device.device_profiles?.[0]?.profile_key?.replace('GIMML_', '') || 'Not assigned'}</div>
                 <div className="mt-1 text-xs text-gray-500">Last seen: {formatTimeAgo(device.last_seen_at, healthClock)}</div>
               </div>;
             })}

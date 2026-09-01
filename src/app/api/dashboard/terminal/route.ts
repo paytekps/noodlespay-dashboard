@@ -41,6 +41,36 @@ export async function PUT(req: Request) {
   if (context.role !== 'super_admin' && context.role !== 'admin') return NextResponse.json({ error: 'Administrator access is required to change terminal assignments.' }, { status: 403 });
   const body = await req.json().catch(() => ({}));
   const deviceId = typeof body.deviceId === 'string' ? body.deviceId : '';
+  if (body.settings) {
+    const settings = body.settings;
+    const valid = /^[0-9a-f-]{36}$/i.test(deviceId)
+      && Number.isSafeInteger(settings.default_cents) && settings.default_cents >= 0
+      && Array.isArray(settings.preset_cents) && settings.preset_cents.length === 3
+      && settings.preset_cents.every((value: unknown) => Number.isSafeInteger(value) && Number(value) >= 0)
+      && Number.isSafeInteger(settings.increment_cents) && settings.increment_cents >= 0
+      && Number.isSafeInteger(settings.maximum_cents) && settings.maximum_cents > 0
+      && Number.isSafeInteger(settings.reset_seconds) && settings.reset_seconds >= 5 && settings.reset_seconds <= 300;
+    if (!valid) return NextResponse.json({ error: 'Enter valid unified terminal settings.' }, { status: 400 });
+    const terminal = context.admin.schema('gimml_terminal');
+    const { data: device } = await terminal.from('devices').select('id').eq('id', deviceId).maybeSingle();
+    if (!device) return NextResponse.json({ error: 'Unified terminal not found.' }, { status: 404 });
+    const normalized = {
+      default_cents: settings.default_cents,
+      preset_cents: settings.preset_cents,
+      increment_cents: settings.increment_cents,
+      maximum_cents: settings.maximum_cents,
+      reset_seconds: settings.reset_seconds
+    };
+    const { data: existing } = await terminal.from('device_settings').select('device_id').eq('device_id', deviceId).eq('key', 'terminal').maybeSingle();
+    const result = existing
+      ? await terminal.from('device_settings').update({ value_json: normalized, updated_at: new Date().toISOString() }).eq('device_id', deviceId).eq('key', 'terminal')
+      : await terminal.from('device_settings').insert({ device_id: deviceId, key: 'terminal', value_json: normalized, revision: 1 });
+    if (result.error) {
+      console.error('Unified terminal settings save failed:', result.error);
+      return NextResponse.json({ error: 'Unified terminal settings could not be saved.' }, { status: 500 });
+    }
+    return NextResponse.json({ saved: true });
+  }
   const profileKey = body.profileKey;
   const layoutKey = body.layoutKey;
   if (!/^[0-9a-f-]{36}$/i.test(deviceId) || !['GIMML_ONE', 'GIMML_MINI', 'CUSTOM'].includes(profileKey) || !['ONE', 'MINI'].includes(layoutKey)) {
