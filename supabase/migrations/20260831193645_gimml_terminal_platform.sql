@@ -274,7 +274,7 @@ insert into gimml_terminal.plans(key,display_name,description,sort_order) values
 on conflict do nothing;
 
 insert into gimml_terminal.plan_items(plan_key,sku,included_quantity)
-select 'GIMML_ONE',sku,1 from gimml_terminal.catalog_items where capability_key not in('KEYPAD_AMOUNT','KEYED_ENTRY','LOCAL_MERCHANT_MENU')
+select 'GIMML_ONE',sku,1 from gimml_terminal.catalog_items where capability_key not in('KEYPAD_AMOUNT')
 on conflict do nothing;
 insert into gimml_terminal.plan_items(plan_key,sku,included_quantity)
 select 'GIMML_MINI',sku,1 from gimml_terminal.catalog_items where capability_key not in('FIXED_AMOUNT','INCREMENT')
