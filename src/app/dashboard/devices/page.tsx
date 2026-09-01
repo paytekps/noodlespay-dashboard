@@ -529,9 +529,8 @@ max_amount: cfg?.max_amount || 100,
 
   useEffect(() => {
     if (!profile) return;
-    const refresh = () => { void loadDevices(); void loadUnifiedDevices(); };
-    const timer = window.setTimeout(refresh, 0);
-    const interval = window.setInterval(refresh, 15_000);
+    const timer = window.setTimeout(() => { void loadDevices(); void loadUnifiedDevices(); }, 0);
+    const interval = window.setInterval(() => void loadUnifiedDevices(), 15_000);
     return () => { window.clearTimeout(timer); window.clearInterval(interval); };
   }, [loadDevices, loadUnifiedDevices, profile]);
 
