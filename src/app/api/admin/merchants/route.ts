@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { dashboardRequestContext, hasDashboardPermission } from '../../../../lib/dashboard-request';
 
-const merchantColumns = 'id,name,slug,status,sales_rep_id,legal_business_name,dba_name,primary_contact_name,primary_contact_email,primary_contact_phone,address_line_1,address_line_2,city,state_region,postal_code,country_code,website,business_type,currency,timezone,billing_status,created_at';
+const merchantColumns = 'id,name,slug,status,sales_rep_id,legal_business_name,dba_name,primary_contact_name,primary_contact_email,primary_contact_phone,address_line_1,address_line_2,city,state_region,postal_code,country_code,website,business_type,currency,timezone,billing_status,is_test,created_at';
 
 async function managementContext(req: Request) {
   const context = await dashboardRequestContext(req);
@@ -64,12 +64,13 @@ export async function DELETE(req: Request) {
   const merchantId = typeof body.merchantId === 'string' ? body.merchantId : '';
   const confirmName = typeof body.confirmName === 'string' ? body.confirmName : '';
   if (!merchantId || !confirmName) return NextResponse.json({ error: 'Type the exact merchant name to confirm deletion.' }, { status: 400 });
-  const { data: linkedUserIds, error } = await context.admin.rpc('dashboard_purge_test_merchant', { p_merchant_id: merchantId, p_confirm_name: confirmName });
+  const { data: linkedUserIds, error } = await context.admin.rpc('dashboard_purge_empty_merchant', { p_merchant_id: merchantId, p_confirm_name: confirmName });
   if (error) {
     console.error('Merchant permanent deletion rejected:', error.code);
     const protectedHistory = error.message.includes('financial history');
+    const notTest = error.message.includes('not designated as test');
     const mismatch = error.message.includes('confirmation');
-    return NextResponse.json({ error: protectedHistory ? 'This merchant has payment, settlement, or external billing history and can only be archived.' : mismatch ? 'The merchant name does not match.' : 'The test merchant could not be deleted.' }, { status: protectedHistory || mismatch ? 400 : 500 });
+    return NextResponse.json({ error: protectedHistory ? 'This merchant has payment, settlement, or external billing history and can only be archived.' : notTest ? 'Only a merchant explicitly designated as test can be permanently deleted.' : mismatch ? 'The merchant name does not match.' : 'The merchant could not be deleted.' }, { status: protectedHistory || notTest || mismatch ? 400 : 500 });
   }
   const authCleanupFailures: string[] = [];
   for (const userId of Array.isArray(linkedUserIds) ? linkedUserIds : []) {
@@ -85,4 +86,3 @@ export async function DELETE(req: Request) {
   }
   return NextResponse.json({ deleted: true, ...(await merchantList(context)) });
 }
-

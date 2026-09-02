@@ -20,6 +20,7 @@ export type MerchantRecord = {
   currency: string;
   timezone: string;
   billing_status: string;
+  is_test: boolean;
   created_at: string;
 };
 
@@ -45,12 +46,12 @@ export type MerchantFormValues = {
   currency: string;
   timezone: string;
   billingStatus: string;
+  isTest: boolean;
 };
 
 export const emptyMerchantForm: MerchantFormValues = {
   name: '', slug: '', legalBusinessName: '', dbaName: '', primaryContactName: '',
   primaryContactEmail: '', primaryContactPhone: '', addressLine1: '', addressLine2: '',
   city: '', stateRegion: '', postalCode: '', countryCode: 'US', website: '', businessType: '',
-  salesRepId: '', currency: 'USD', timezone: 'America/New_York', billingStatus: 'trialing'
+  salesRepId: '', currency: 'USD', timezone: 'America/New_York', billingStatus: 'trialing', isTest: false
 };
-
