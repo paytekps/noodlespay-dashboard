@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createHmac, randomBytes } from 'node:crypto';
 import { dashboardRequestContext, hasDashboardPermission } from '../../../../lib/dashboard-request';
+import { capabilityWorksWithLayout } from '../../../../lib/gimml-terminal-dashboard/compatibility';
 
 async function contextFor(req: Request) {
   const context = await dashboardRequestContext(req);
@@ -114,11 +115,15 @@ export async function POST(req: Request) {
   const enabled = body.enabled === true;
   if (!/^[0-9a-f-]{36}$/i.test(merchantId) || !/^[0-9a-f-]{36}$/i.test(deviceId) || !/^[A-Z0-9_:-]{2,64}$/.test(capabilityKey)) return NextResponse.json({ error: 'Choose a valid merchant, device, and feature.' }, { status: 400 });
   const terminal = context.admin.schema('gimml_terminal');
-  const [{ data: device }, { data: item }] = await Promise.all([
+  const [{ data: device }, { data: item }, { data: deviceProfile }] = await Promise.all([
     terminal.from('devices').select('id, merchant_id').eq('id', deviceId).eq('merchant_id', merchantId).maybeSingle(),
-    terminal.from('catalog_items').select('sku, scope').eq('capability_key', capabilityKey).eq('active', true).limit(1).maybeSingle()
+    terminal.from('catalog_items').select('sku, scope').eq('capability_key', capabilityKey).eq('active', true).limit(1).maybeSingle(),
+    terminal.from('device_profiles').select('layout_key').eq('device_id', deviceId).maybeSingle()
   ]);
   if (!device || !item) return NextResponse.json({ error: 'Device or catalog feature not found.' }, { status: 404 });
+  if (!deviceProfile || !capabilityWorksWithLayout(capabilityKey, deviceProfile.layout_key)) {
+    return NextResponse.json({ error: 'This option is not available for the assigned terminal type.' }, { status: 400 });
+  }
   const { data: existing } = await terminal.from('merchant_entitlements').select('id, state').eq('merchant_id', merchantId).eq('sku', item.sku).order('starts_at', { ascending: false }).limit(1).maybeSingle();
   if (!enabled) {
     if (existing) {

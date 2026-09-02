@@ -659,6 +659,7 @@ max_amount: cfg?.max_amount || 100,
       .some(value => String(value ?? '').toLowerCase().includes(normalizedSearch));
   });
   const selectedDevice = combinedDevices.find(device => device.id === selectedDeviceId);
+  const isMiniDevice = (serialNumber: string) => unifiedDevices.find(device => device.serial_number === serialNumber)?.device_profiles?.[0]?.profile_key === 'GIMML_MINI';
 
 function updateLocalConfig(deviceId: string, values: any) {
   setSavedDeviceId(null);
@@ -885,6 +886,7 @@ async function saveConfig(device: any) {
             {/* CONFIG ONLY */}
 
 {/* DEFAULT AMOUNT */}
+{!isMiniDevice(d.serial_number) && (
 <div>
   <label className="block mb-1">
     Default Amount
@@ -901,6 +903,7 @@ async function saveConfig(device: any) {
     className="border px-2 py-1 rounded w-full"
   />
 </div>
+)}
 
             {/* PREMIUM PRESETS */}
             {d.plan === 'premium' && (
@@ -937,7 +940,7 @@ async function saveConfig(device: any) {
             )}
 
             {/* PRO AND PREMIUM INCREMENT */}
-            {(d.plan === 'pro' || d.plan === 'premium') && (
+            {!isMiniDevice(d.serial_number) && (d.plan === 'pro' || d.plan === 'premium') && (
               <div className="space-y-3">
               <label className="flex items-center gap-2">
                 <input
