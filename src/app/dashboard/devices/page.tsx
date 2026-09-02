@@ -308,6 +308,7 @@ export default function Devices() {
   const [merchants, setMerchants] = useState<any[]>([]);
   const [selectedMerchant, setSelectedMerchant] = useState('');
   const [search, setSearch] = useState('');
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [transactionsMap, setTransactionsMap] = useState<any>({});
   const [savingDeviceId, setSavingDeviceId] = useState<string | null>(null);
@@ -646,6 +647,19 @@ max_amount: cfg?.max_amount || 100,
   const totalTransactions = allTransactions.length;
   const avgTransaction = totalTransactions ? Math.round(totalVolume / totalTransactions) : 0;
 
+  const combinedDevices = devices.filter(device =>
+    /^6459/.test(device.serial_number) &&
+    unifiedDevices.some(unified => unified.serial_number === device.serial_number)
+  );
+  const normalizedSearch = search.trim().toLowerCase();
+  const visibleDevices = combinedDevices.filter(device => {
+    if (!normalizedSearch) return true;
+    const unified = unifiedDevices.find(candidate => candidate.serial_number === device.serial_number);
+    return [device.serial_number, device.name, device.merchant_name, unified?.merchantName]
+      .some(value => String(value ?? '').toLowerCase().includes(normalizedSearch));
+  });
+  const selectedDevice = combinedDevices.find(device => device.id === selectedDeviceId);
+
 function updateLocalConfig(deviceId: string, values: any) {
   setSavedDeviceId(null);
   setConfigErrors(current => ({ ...current, [deviceId]: [] }));
@@ -762,6 +776,58 @@ async function saveConfig(device: any) {
       {unifiedDevicesError && <div className="mb-6 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">{unifiedDevicesError}</div>}
       <div className="mb-6 flex justify-end"><Link href="/dashboard/terminal" className="rounded bg-blue-700 px-4 py-2 text-sm font-semibold text-white">Plans &amp; features</Link></div>
 
+      {!selectedDevice && (
+        <section className="space-y-4">
+          <label className="block text-sm font-medium">
+            Search devices
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search any part of a serial number, device name, or merchant name"
+              className="mt-1 w-full rounded border bg-white px-3 py-2"
+            />
+          </label>
+
+          <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
+            <div className="hidden grid-cols-[1.2fr_1fr_1.2fr_auto] gap-4 border-b bg-gray-50 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 sm:grid">
+              <div>Serial number</div>
+              <div>Device name</div>
+              <div>Merchant</div>
+              <div>Status</div>
+            </div>
+            {visibleDevices.map(device => {
+              const unified = unifiedDevices.find(candidate => candidate.serial_number === device.serial_number);
+              const lastSeenMs = unified?.last_seen_at ? Date.parse(unified.last_seen_at) : Number.NaN;
+              const online = Number.isFinite(lastSeenMs) && healthClock - lastSeenMs <= ONLINE_WINDOW_MS;
+              return (
+                <button
+                  type="button"
+                  key={device.id}
+                  onClick={() => setSelectedDeviceId(device.id)}
+                  className="grid w-full gap-2 border-b px-5 py-4 text-left transition hover:bg-blue-50 focus:bg-blue-50 focus:outline-none last:border-b-0 sm:grid-cols-[1.2fr_1fr_1.2fr_auto] sm:items-center sm:gap-4"
+                >
+                  <div><span className="text-xs text-gray-500 sm:hidden">Serial: </span><span className="font-mono font-semibold">{device.serial_number}</span></div>
+                  <div><span className="text-xs text-gray-500 sm:hidden">Device: </span>{device.name || `Datecs ${device.serial_number}`}</div>
+                  <div><span className="text-xs text-gray-500 sm:hidden">Merchant: </span>{device.merchant_name || unified?.merchantName || 'Unknown merchant'}</div>
+                  <div className={`text-sm font-semibold ${online ? 'text-green-700' : 'text-gray-500'}`}>{online ? 'Connected' : 'Offline'} <span aria-hidden="true">›</span></div>
+                </button>
+              );
+            })}
+            {visibleDevices.length === 0 && (
+              <div className="p-10 text-center text-gray-500">
+                {normalizedSearch ? 'No devices match that search.' : 'No combined Datecs devices are available for this merchant selection.'}
+              </div>
+            )}
+          </div>
+          <p className="text-sm text-gray-500">Select a device to open its settings, pairing, location, history, and processor setup.</p>
+        </section>
+      )}
+
+      {selectedDevice && (
+      <>
+      <button type="button" onClick={() => setSelectedDeviceId(null)} className="mb-6 text-sm font-semibold text-blue-700 hover:underline">← Back to all devices</button>
+
       {/* SUMMARY */}
       <div className="grid gap-4 mb-8 sm:grid-cols-3">
         <div className="bg-white p-4 rounded-xl shadow text-center">
@@ -788,13 +854,7 @@ async function saveConfig(device: any) {
 
       <div className="grid gap-6">
 
-        {devices.filter(device => /^6459/.test(device.serial_number) && unifiedDevices.some(unified => unified.serial_number === device.serial_number)).length === 0 && (
-          <div className="rounded-xl border border-dashed bg-white p-10 text-center text-gray-500">
-            No devices are available for this merchant selection.
-          </div>
-        )}
-
-        {devices.filter(device => /^6459/.test(device.serial_number) && unifiedDevices.some(unified => unified.serial_number === device.serial_number)).map(d => (
+        {combinedDevices.filter(device => device.id === selectedDevice.id).map(d => (
 
           <div key={d.id} className="bg-white p-6 rounded-xl shadow space-y-4">
 
@@ -1084,6 +1144,8 @@ async function saveConfig(device: any) {
         ))}
 
       </div>
+      </>
+      )}
     </div>
   );
 }
