@@ -21,6 +21,8 @@ export type MerchantRecord = {
   timezone: string;
   billing_status: string;
   is_test: boolean;
+  device_count: number;
+  active_device_count: number;
   created_at: string;
 };
 

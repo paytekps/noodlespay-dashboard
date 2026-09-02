@@ -11,12 +11,15 @@ async function managementContext(req: Request) {
 }
 
 async function merchantList(context: Exclude<Awaited<ReturnType<typeof managementContext>>, { error: string; status: number }>) {
-  const [{ data: merchants, error }, { data: salesReps, error: salesError }] = await Promise.all([
+  const [{ data: merchants, error }, { data: salesReps, error: salesError }, { data: devices, error: devicesError }] = await Promise.all([
     context.admin.from('merchants').select(merchantColumns).order('name'),
-    context.admin.from('sales_reps').select('id,name,email').order('name')
+    context.admin.from('sales_reps').select('id,name,email').order('name'),
+    context.admin.from('devices').select('merchant_id,status')
   ]);
-  if (error || salesError) throw error || salesError;
-  return { merchants: merchants ?? [], salesRepresentatives: salesReps ?? [], owner: context.role === 'super_admin' };
+  if (error || salesError || devicesError) throw error || salesError || devicesError;
+  const counts = new Map<string, { total: number; active: number }>();
+  for (const device of devices ?? []) { if (!device.merchant_id) continue; const count = counts.get(device.merchant_id) ?? { total: 0, active: 0 }; count.total += 1; if (device.status === 'active') count.active += 1; counts.set(device.merchant_id, count); }
+  return { merchants: (merchants ?? []).map(merchant => ({ ...merchant, device_count: counts.get(merchant.id)?.total ?? 0, active_device_count: counts.get(merchant.id)?.active ?? 0 })), salesRepresentatives: salesReps ?? [], owner: context.role === 'super_admin' };
 }
 
 export async function GET(req: Request) {
@@ -47,13 +50,17 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   const context = await managementContext(req);
   if ('error' in context) return NextResponse.json({ error: context.error }, { status: context.status });
-  if (context.role !== 'super_admin') return NextResponse.json({ error: 'Only the Owner can archive a merchant.' }, { status: 403 });
+  if (context.role !== 'super_admin') return NextResponse.json({ error: 'Only the Owner can change merchant operating status.' }, { status: 403 });
   const body = await req.json().catch(() => ({}));
   const merchantId = typeof body.merchantId === 'string' ? body.merchantId : '';
+  const action = typeof body.action === 'string' ? body.action : '';
   if (!merchantId) return NextResponse.json({ error: 'Choose a merchant.' }, { status: 400 });
-  const { error } = await context.admin.rpc('dashboard_archive_merchant', { p_merchant_id: merchantId, p_actor_id: context.user.id });
-  if (error) { console.error('Merchant archive failed:', error.code); return NextResponse.json({ error: 'The merchant could not be archived.' }, { status: 400 }); }
-  return NextResponse.json({ archived: true, ...(await merchantList(context)) });
+  const functions = { deactivate: 'dashboard_deactivate_merchant', reactivate: 'dashboard_reactivate_merchant', archive: 'dashboard_archive_merchant' } as const;
+  if (!(action in functions)) return NextResponse.json({ error: 'Choose deactivate, reactivate, or archive.' }, { status: 400 });
+  const functionName = functions[action as keyof typeof functions];
+  const { data: affectedDevices, error } = await context.admin.rpc(functionName, { p_merchant_id: merchantId, p_actor_id: context.user.id });
+  if (error) { console.error('Merchant status change failed:', action, error.code); return NextResponse.json({ error: 'The merchant status could not be changed.' }, { status: 400 }); }
+  return NextResponse.json({ action, affectedDevices: affectedDevices ?? 0, ...(await merchantList(context)) });
 }
 
 export async function DELETE(req: Request) {

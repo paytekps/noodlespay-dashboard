@@ -86,6 +86,7 @@ export async function POST(req: Request) {
         .from('devices')
         .select('id, merchant_id')
         .eq('id', device_id)
+        .eq('status', 'active')
         .maybeSingle();
       if (deviceError
           || !simulatedDevice?.merchant_id
