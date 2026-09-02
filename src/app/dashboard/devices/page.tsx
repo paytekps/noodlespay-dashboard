@@ -161,10 +161,10 @@ function DeviceHealthPanel({
             className={`h-2.5 w-2.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`}
             aria-hidden="true"
           />
-          <span className="font-semibold">Legacy app {isOnline ? 'online' : 'offline'}</span>
+          <span className="font-semibold">Combined app {isOnline ? 'connected' : 'offline'}</span>
         </div>
         <div className="mt-1 text-sm text-gray-600">
-          Original app last seen: {formatTimeAgo(device.last_seen_at, nowMs)}
+          Last synchronized: {formatTimeAgo(device.last_seen_at, nowMs)}
         </div>
         {device.app_version && (
           <div className="mt-1 text-xs text-gray-500">App version {device.app_version}</div>
@@ -709,7 +709,7 @@ async function saveConfig(device: any) {
   if (unifiedDevice) {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) {
-      alert('Legacy settings were saved, but unified terminal sync requires you to sign in again.');
+      alert('Settings were saved, but the combined terminal sync requires you to sign in again.');
       setSavingDeviceId(null);
       return;
     }
@@ -730,7 +730,7 @@ async function saveConfig(device: any) {
     });
     if (!response.ok) {
       const payload = await response.json().catch(() => ({}));
-      alert(payload.error || 'Legacy settings were saved, but the unified terminal could not be synchronized.');
+      alert(payload.error || 'Settings were saved, but the combined terminal could not be synchronized.');
       setSavingDeviceId(null);
       return;
     }
@@ -746,7 +746,7 @@ async function saveConfig(device: any) {
 
       <h1 className="text-3xl font-bold">Devices</h1>
       <p className="mt-2 mb-8 text-gray-600">
-        {profile?.role === 'merchant' ? 'Manage the settings available with your purchased plan.' : profile?.role === 'sales_rep' ? 'Manage devices for merchants assigned to you.' : 'Manage devices across all merchants.'}
+        {profile?.role === 'merchant' ? 'Manage your combined Gimml Terminal settings.' : profile?.role === 'sales_rep' ? 'View combined terminals for your assigned merchants.' : 'Manage the combined Gimml Terminal on your Datecs devices.'}
       </p>
 
       {profile?.role !== 'merchant' && (
@@ -759,38 +759,8 @@ async function saveConfig(device: any) {
         </label>
       )}
 
-      <section className="mb-8 rounded-xl border border-blue-200 bg-blue-50 p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-blue-950">Unified Gimml Terminal devices</h2>
-            <p className="mt-1 text-sm text-blue-900">Live devices running the new combined Gimml Terminal app.</p>
-          </div>
-          <Link href="/dashboard/terminal" className="rounded bg-blue-700 px-4 py-2 text-sm font-semibold text-white">
-            Manage profiles and features
-          </Link>
-        </div>
-        {unifiedDevicesError && <div className="mt-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">{unifiedDevicesError}</div>}
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          {unifiedDevices
-            .filter(device => !selectedMerchant || device.merchantId === selectedMerchant)
-            .map(device => {
-              const lastSeen = device.last_seen_at ? Date.parse(device.last_seen_at) : Number.NaN;
-              const online = Number.isFinite(lastSeen) && healthClock - lastSeen <= ONLINE_WINDOW_MS;
-              return <div key={device.id} className="rounded-lg border border-blue-200 bg-white p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="font-semibold">Serial {device.serial_number}</div>
-                  <span className={`rounded-full px-2 py-1 text-xs font-semibold ${online ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>{online ? 'Connected' : 'Offline'}</span>
-                </div>
-                {profile?.role !== 'merchant' && <div className="mt-1 text-sm text-gray-600">{device.merchantName}</div>}
-                <div className="mt-2 text-sm text-gray-700">Profile: {device.device_profiles?.[0]?.profile_key?.replace('GIMML_', '') || 'Not assigned'}</div>
-                <div className="mt-1 text-xs text-gray-500">Last seen: {formatTimeAgo(device.last_seen_at, healthClock)}</div>
-              </div>;
-            })}
-          {!unifiedDevicesError && unifiedDevices.filter(device => !selectedMerchant || device.merchantId === selectedMerchant).length === 0 && (
-            <div className="text-sm text-blue-900">No unified Gimml Terminal devices are assigned to this merchant.</div>
-          )}
-        </div>
-      </section>
+      {unifiedDevicesError && <div className="mb-6 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">{unifiedDevicesError}</div>}
+      <div className="mb-6 flex justify-end"><Link href="/dashboard/terminal" className="rounded bg-blue-700 px-4 py-2 text-sm font-semibold text-white">Plans &amp; features</Link></div>
 
       {/* SUMMARY */}
       <div className="grid gap-4 mb-8 sm:grid-cols-3">
@@ -818,24 +788,24 @@ async function saveConfig(device: any) {
 
       <div className="grid gap-6">
 
-        {devices.length === 0 && (
+        {devices.filter(device => /^6459/.test(device.serial_number) && unifiedDevices.some(unified => unified.serial_number === device.serial_number)).length === 0 && (
           <div className="rounded-xl border border-dashed bg-white p-10 text-center text-gray-500">
             No devices are available for this merchant selection.
           </div>
         )}
 
-        {devices.map(d => (
+        {devices.filter(device => /^6459/.test(device.serial_number) && unifiedDevices.some(unified => unified.serial_number === device.serial_number)).map(d => (
 
           <div key={d.id} className="bg-white p-6 rounded-xl shadow space-y-4">
 
             <div>
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="font-semibold text-lg">{d.name}</div>
-                  <div className="text-xs font-medium text-amber-700">Original Mini/One app record — not the unified terminal</div>
+                  <div className="font-semibold text-lg">{d.name || `Datecs ${d.serial_number}`}</div>
+                  <div className="text-xs font-medium text-blue-700">Combined Gimml Terminal · Serial {d.serial_number}</div>
                 </div>
                 <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold uppercase text-gray-600">
-                  Legacy · {d.plan}
+                  {unifiedDevices.find(device => device.serial_number === d.serial_number)?.device_profiles?.[0]?.profile_key?.replace('GIMML_', '') || 'SETUP'}
                 </span>
               </div>
               {profile?.role !== 'merchant' && (
@@ -844,7 +814,7 @@ async function saveConfig(device: any) {
             </div>
 
             <DeviceHealthPanel
-              device={d}
+              device={{ ...d, last_seen_at: unifiedDevices.find(device => device.serial_number === d.serial_number)?.last_seen_at ?? d.last_seen_at }}
               nowMs={healthClock}
               canControlLocation={profile?.role !== 'sales_rep'}
               locationBusy={locationBusyDeviceId === d.id}

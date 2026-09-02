@@ -4,13 +4,26 @@ import type { SupabaseClient, User } from '@supabase/supabase-js';
 import { createServiceClient, createUserRequestClient } from './server-supabase';
 import type { UserRole } from './roles';
 import { isUserRole } from './roles';
+import { defaultPermissions, type DashboardPermission } from './dashboard-permissions';
 
 export type DashboardRequestContext = {
   admin: SupabaseClient;
   user: User;
   role: UserRole;
   merchantIds: string[] | null;
+  permissions: Set<DashboardPermission>;
 };
+
+async function permissionsForRole(admin: SupabaseClient, role: UserRole) {
+  if (role === 'super_admin') return defaultPermissions(role);
+  const fallback = defaultPermissions(role);
+  const { data, error } = await admin
+    .from('dashboard_role_permissions')
+    .select('permission_key, allowed')
+    .eq('role', role);
+  if (error || !data?.length) return fallback;
+  return new Set(data.filter(row => row.allowed).map(row => row.permission_key as DashboardPermission));
+}
 
 export async function dashboardRequestContext(
   req: Request
@@ -46,9 +59,10 @@ export async function dashboardRequestContext(
   if (profileError || !profile || !isUserRole(profile.role)) {
     return { error: 'Your access profile could not be verified.', status: 403 };
   }
+  const permissions = await permissionsForRole(admin, profile.role);
 
   if (profile.role === 'super_admin' || profile.role === 'admin') {
-    return { admin, user, role: profile.role, merchantIds: null };
+    return { admin, user, role: profile.role, merchantIds: null, permissions };
   }
 
   if (profile.role === 'merchant') {
@@ -56,7 +70,8 @@ export async function dashboardRequestContext(
       admin,
       user,
       role: profile.role,
-      merchantIds: profile.merchant_id ? [profile.merchant_id] : []
+      merchantIds: profile.merchant_id ? [profile.merchant_id] : [],
+      permissions
     };
   }
 
@@ -67,7 +82,7 @@ export async function dashboardRequestContext(
     .maybeSingle();
 
   if (repError || !salesRep) {
-    return { admin, user, role: profile.role, merchantIds: [] };
+    return { admin, user, role: profile.role, merchantIds: [], permissions };
   }
 
   const { data: assignments, error: assignmentError } = await admin
@@ -83,10 +98,18 @@ export async function dashboardRequestContext(
     admin,
     user,
     role: profile.role,
+    permissions,
     merchantIds: (assignments ?? [])
       .map((assignment) => assignment.merchant_id)
       .filter((merchantId): merchantId is string => Boolean(merchantId))
   };
+}
+
+export function hasDashboardPermission(
+  context: DashboardRequestContext,
+  permission: DashboardPermission
+) {
+  return context.role === 'super_admin' || context.permissions.has(permission);
 }
 
 export function canAccessMerchant(

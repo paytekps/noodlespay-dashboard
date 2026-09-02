@@ -21,7 +21,7 @@ export function landingPageForRole(role: UserRole) {
 export function canAccessPath(role: UserRole, pathname: string) {
   if (isPublicPath(pathname)) return true;
 
-  if (pathname.startsWith('/admin/users')) {
+  if (pathname.startsWith('/admin/users') || pathname.startsWith('/admin/permissions')) {
     return role === 'super_admin';
   }
 

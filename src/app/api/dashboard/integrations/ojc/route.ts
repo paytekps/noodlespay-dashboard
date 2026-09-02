@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import {
   canAccessMerchant,
   dashboardRequestContext,
+  hasDashboardPermission,
   type DashboardRequestContext
 } from '../../../../../lib/dashboard-request';
 
@@ -33,9 +34,7 @@ function isError(
 }
 
 function canManageIntegration(context: DashboardRequestContext) {
-  return context.role === 'merchant'
-    || context.role === 'admin'
-    || context.role === 'super_admin';
+  return hasDashboardPermission(context, 'integrations.manage') && context.role !== 'merchant';
 }
 
 async function authorizedMerchant(
@@ -72,8 +71,8 @@ function publicIntegration(integration: MerchantIntegration | null | undefined) 
 export async function GET(req: Request) {
   const context = await dashboardRequestContext(req);
   if (isError(context)) return json({ error: context.error }, context.status);
-  if (!canManageIntegration(context)) {
-    return json({ error: 'Merchant or administrator access is required.' }, 403);
+  if (!hasDashboardPermission(context, 'integrations.view')) {
+    return json({ error: 'You do not have permission to view integrations.' }, 403);
   }
 
   let merchantQuery = context.admin
@@ -124,7 +123,7 @@ export async function PUT(req: Request) {
   const context = await dashboardRequestContext(req);
   if (isError(context)) return json({ error: context.error }, context.status);
   if (!canManageIntegration(context)) {
-    return json({ error: 'Merchant or administrator access is required.' }, 403);
+    return json({ error: 'Only authorized administrators can change integration credentials.' }, 403);
   }
 
   const body = await req.json().catch(() => ({}));
@@ -170,7 +169,7 @@ export async function DELETE(req: Request) {
   const context = await dashboardRequestContext(req);
   if (isError(context)) return json({ error: context.error }, context.status);
   if (!canManageIntegration(context)) {
-    return json({ error: 'Merchant or administrator access is required.' }, 403);
+    return json({ error: 'Only authorized administrators can change integration credentials.' }, 403);
   }
 
   const body = await req.json().catch(() => ({}));

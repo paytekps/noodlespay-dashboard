@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createHmac, randomBytes } from 'node:crypto';
-import { dashboardRequestContext } from '../../../../lib/dashboard-request';
+import { dashboardRequestContext, hasDashboardPermission } from '../../../../lib/dashboard-request';
 
 async function contextFor(req: Request) {
   const context = await dashboardRequestContext(req);
   if ('error' in context) return context;
-  if (context.role === 'sales_rep') return { error: 'Merchant or administrator access is required.', status: 403 };
+  if (!hasDashboardPermission(context, 'plans.view')) return { error: 'Terminal plans are not available to this role.', status: 403 };
   return context;
 }
 
@@ -47,7 +47,7 @@ export async function GET(req: Request) {
 export async function PUT(req: Request) {
   const context = await contextFor(req);
   if ('error' in context) return NextResponse.json({ error: context.error }, { status: context.status });
-  if (context.role !== 'super_admin' && context.role !== 'admin') return NextResponse.json({ error: 'Administrator access is required to change terminal assignments.' }, { status: 403 });
+  if (!hasDashboardPermission(context, 'devices.configure')) return NextResponse.json({ error: 'You do not have permission to change device settings.' }, { status: 403 });
   const body = await req.json().catch(() => ({}));
   const deviceId = typeof body.deviceId === 'string' ? body.deviceId : '';
   if (body.settings) {
@@ -103,7 +103,7 @@ export async function PUT(req: Request) {
 export async function POST(req: Request) {
   const context = await contextFor(req);
   if ('error' in context) return NextResponse.json({ error: context.error }, { status: context.status });
-  if (context.role !== 'super_admin' && context.role !== 'admin') return NextResponse.json({ error: 'Administrator access is required to change entitlements.' }, { status: 403 });
+  if (!hasDashboardPermission(context, 'features.assign')) return NextResponse.json({ error: 'You do not have permission to change device options.' }, { status: 403 });
   const body = await req.json().catch(() => ({}));
   const merchantId = typeof body.merchantId === 'string' ? body.merchantId : '';
   const deviceId = typeof body.deviceId === 'string' ? body.deviceId : '';
@@ -143,7 +143,7 @@ export async function POST(req: Request) {
 export async function DELETE(req: Request) {
   const context = await contextFor(req);
   if ('error' in context) return NextResponse.json({ error: context.error }, { status: context.status });
-  if (context.role !== 'super_admin' && context.role !== 'admin') return NextResponse.json({ error: 'Administrator access is required to create pairing codes.' }, { status: 403 });
+  if (!hasDashboardPermission(context, 'devices.enroll')) return NextResponse.json({ error: 'You do not have permission to enroll devices.' }, { status: 403 });
   const body = await req.json().catch(() => ({}));
   const deviceId = typeof body.deviceId === 'string' ? body.deviceId : '';
   const applicationId = typeof body.applicationId === 'string' ? body.applicationId : '';
@@ -170,7 +170,7 @@ export async function DELETE(req: Request) {
 export async function PATCH(req: Request) {
   const context = await contextFor(req);
   if ('error' in context) return NextResponse.json({ error: context.error }, { status: context.status });
-  if (context.role !== 'super_admin' && context.role !== 'admin') return NextResponse.json({ error: 'Administrator access is required to change prices.' }, { status: 403 });
+  if (context.role !== 'super_admin' || !hasDashboardPermission(context, 'catalog.pricing.manage')) return NextResponse.json({ error: 'Only the owner can add or change pricing.' }, { status: 403 });
   const body = await req.json().catch(() => ({}));
   const sku = typeof body.sku === 'string' ? body.sku : '';
   const cents = Number(body.unitPriceCents);
