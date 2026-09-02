@@ -47,10 +47,10 @@ export async function GET(req: Request) {
 export async function PUT(req: Request) {
   const context = await contextFor(req);
   if ('error' in context) return NextResponse.json({ error: context.error }, { status: context.status });
-  if (!hasDashboardPermission(context, 'devices.configure')) return NextResponse.json({ error: 'You do not have permission to change device settings.' }, { status: 403 });
   const body = await req.json().catch(() => ({}));
   const deviceId = typeof body.deviceId === 'string' ? body.deviceId : '';
   if (body.settings) {
+    if (!hasDashboardPermission(context, 'devices.configure')) return NextResponse.json({ error: 'You do not have permission to change device settings.' }, { status: 403 });
     const settings = body.settings;
     const valid = /^[0-9a-f-]{36}$/i.test(deviceId)
       && Number.isSafeInteger(settings.default_cents) && settings.default_cents >= 0
@@ -83,6 +83,9 @@ export async function PUT(req: Request) {
       return NextResponse.json({ error: 'Unified terminal settings could not be saved.' }, { status: 500 });
     }
     return NextResponse.json({ saved: true });
+  }
+  if (context.role !== 'admin' && context.role !== 'super_admin') {
+    return NextResponse.json({ error: 'Only an administrator can assign a terminal profile.' }, { status: 403 });
   }
   const profileKey = body.profileKey;
   const layoutKey = body.layoutKey;

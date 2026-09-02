@@ -3,7 +3,7 @@ import type { UserRole } from './roles';
 export const dashboardPermissionCatalog = [
   { key: 'overview.view', label: 'View dashboard overview', group: 'Dashboard' },
   { key: 'devices.view', label: 'View devices and health', group: 'Devices' },
-  { key: 'devices.configure', label: 'Change device settings and profiles', group: 'Devices' },
+  { key: 'devices.configure', label: 'Change device settings', group: 'Devices' },
   { key: 'devices.enroll', label: 'Enroll and pair devices', group: 'Devices' },
   { key: 'plans.view', label: 'View plans and options', group: 'Plans & features' },
   { key: 'plans.select', label: 'Choose a plan', group: 'Plans & features' },
