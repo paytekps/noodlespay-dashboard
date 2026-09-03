@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { CapabilityCatalog } from '../../../components/terminal/capability-catalog';
-import { DeviceProfileCard } from '../../../components/terminal/device-profile-card';
-import { EntitlementEditor } from '../../../components/terminal/entitlement-editor';
-import { TerminalReport } from '../../../components/terminal/terminal-report';
+import { MerchantSubscriptions } from '../../../components/terminal/merchant-subscriptions';
+import { PlanOverview } from '../../../components/terminal/plan-overview';
 import type { TerminalDashboardData } from '../../../lib/gimml-terminal-dashboard/types';
 import { supabase } from '../../../lib/supabase';
 
@@ -31,9 +30,10 @@ export default function TerminalManagementPage() {
   })(); }, []);
   if (error) return <main className="mx-auto max-w-6xl p-10"><h1 className="text-3xl font-bold">Gimml Terminal</h1><div className="mt-6 rounded border border-red-200 bg-red-50 p-4 text-red-800">{error}</div></main>;
   if (!data) return <main className="p-10">Loading Gimml Terminal settings…</main>;
-  return <main className="mx-auto max-w-6xl space-y-6 p-10"><div><h1 className="text-3xl font-bold">Plans &amp; features</h1><p className="mt-2 text-gray-600">Configure the combined Gimml Terminal. One and Mini are profiles within this single application.</p></div>
-    <section className="rounded-xl border bg-white p-6 shadow-sm"><h2 className="text-xl font-semibold">Datecs devices</h2><p className="mt-1 text-sm text-gray-600">Only devices enrolled or prepared for the combined Gimml Terminal are shown here. Terminal profiles are assigned by an administrator after the ordered device is programmed.</p><div className="mt-4 space-y-5">{data.merchants.map(merchant => <div key={merchant.id}><div className="mb-2 flex justify-between"><h3 className="font-semibold">{merchant.display_name}</h3><span className="text-sm text-gray-500">Billing: {merchant.billing_status}</span></div><div className="grid gap-3 lg:grid-cols-2">{merchant.devices.filter(device => /^6459/.test(device.serial_number)).map(device => <div className="rounded-lg border p-4" key={device.id}><DeviceProfileCard device={device} canConfigure={role === 'admin' || role === 'super_admin'} canEnroll={permissions.has('devices.enroll')} token={token} debugCertificateSha256={process.env.NEXT_PUBLIC_GIMML_DEBUG_CERT_SHA256} /><EntitlementEditor merchantId={merchant.id} device={device} capabilities={data.capabilities} initialEntitlements={data.entitlements} token={token} canEdit={permissions.has('features.assign')} /></div>)}</div>{merchant.devices.filter(device => /^6459/.test(device.serial_number)).length === 0 && <div className="rounded border border-dashed p-4 text-sm text-gray-500">No combined Datecs terminals assigned.</div>}</div>)}</div></section>
-    <CapabilityCatalog capabilities={data.capabilities} canEdit={permissions.has('catalog.pricing.manage')} token={token} />
-    <TerminalReport transactions={data.transactions} />
+  const isOwner = role === 'super_admin';
+  return <main className="mx-auto max-w-6xl space-y-6 p-10"><div><h1 className="text-3xl font-bold">Plans &amp; features</h1><p className="mt-2 text-gray-600">Terminal types, merchant subscriptions, compatible options, and owner pricing are separated below.</p></div>
+    <PlanOverview plans={data.plans} />
+    <MerchantSubscriptions data={data} role={role} permissions={permissions} token={token} />
+    {isOwner && permissions.has('catalog.pricing.manage') ? <CapabilityCatalog capabilities={data.capabilities} canEdit token={token} /> : null}
   </main>;
 }

@@ -14,3 +14,16 @@ export function profileLabel(profile: string) {
   if (profile === 'GIMML_MINI') return 'Gimml Mini';
   return 'Custom';
 }
+
+const capabilityLabels: Record<string, string> = {
+  CARD_PRESENT: 'Card-present payments', KEYED_ENTRY: 'Manual card entry', FIXED_AMOUNT: 'Fixed amount',
+  KEYPAD_AMOUNT: 'Keypad amount entry', PRESETS: 'Preset amounts', INCREMENT: 'Amount increment',
+  LOCAL_MERCHANT_MENU: 'Merchant menu', VOID: 'Void transactions', REFUND: 'Refunds',
+  SETTLEMENT: 'Batch settlement', CLOSED_LOOP_IDENTIFY: 'Closed-loop card identification',
+  DASHBOARD_REPORTING: 'Dashboard reporting', ADVANCED_REPORTING: 'Advanced reporting',
+  FLEET_HEALTH: 'Device health monitoring', FLEET_LOCATION: 'Device location'
+};
+
+export function capabilityLabel(capability: string) {
+  return capabilityLabels[capability] ?? capability.toLowerCase().replaceAll('_', ' ').replace(/^./, letter => letter.toUpperCase());
+}
