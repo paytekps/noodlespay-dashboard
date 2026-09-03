@@ -15,6 +15,11 @@ export function EntitlementEditor({ merchantId, device, capabilities, initialEnt
     setBusy(capability); setMessage('');
     const response = await fetch('/api/dashboard/terminal', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ merchantId, deviceId: device.id, capabilityKey: capability, enabled: checked }) });
     const payload = await response.json().catch(() => ({}));
+    if (response.ok && payload.checkoutUrl) {
+      setMessage('Opening secure billing checkout…');
+      window.location.assign(payload.checkoutUrl);
+      return;
+    }
     if (response.ok) { setEnabled(current => { const next = new Set(current); checked ? next.add(capability) : next.delete(capability); return next; }); setMessage('Feature assignment saved.'); } else setMessage(payload.error ?? 'Feature assignment could not be saved.');
     setBusy('');
   }

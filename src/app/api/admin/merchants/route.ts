@@ -11,14 +11,15 @@ async function managementContext(req: Request) {
 }
 
 async function merchantList(context: Exclude<Awaited<ReturnType<typeof managementContext>>, { error: string; status: number }>) {
+  const terminal = context.admin.schema('gimml_terminal');
   const [{ data: merchants, error }, { data: salesReps, error: salesError }, { data: devices, error: devicesError }] = await Promise.all([
     context.admin.from('merchants').select(merchantColumns).order('name'),
     context.admin.from('sales_reps').select('id,name,email').order('name'),
-    context.admin.from('devices').select('merchant_id,status')
+    terminal.from('devices').select('merchant_id,enrollment_state')
   ]);
   if (error || salesError || devicesError) throw error || salesError || devicesError;
   const counts = new Map<string, { total: number; active: number }>();
-  for (const device of devices ?? []) { if (!device.merchant_id) continue; const count = counts.get(device.merchant_id) ?? { total: 0, active: 0 }; count.total += 1; if (device.status === 'active') count.active += 1; counts.set(device.merchant_id, count); }
+  for (const device of devices ?? []) { if (!device.merchant_id) continue; const count = counts.get(device.merchant_id) ?? { total: 0, active: 0 }; count.total += 1; if (device.enrollment_state === 'active') count.active += 1; counts.set(device.merchant_id, count); }
   return { merchants: (merchants ?? []).map(merchant => ({ ...merchant, device_count: counts.get(merchant.id)?.total ?? 0, active_device_count: counts.get(merchant.id)?.active ?? 0 })), salesRepresentatives: salesReps ?? [], owner: context.role === 'super_admin' };
 }
 
@@ -66,7 +67,7 @@ export async function PATCH(req: Request) {
 export async function DELETE(req: Request) {
   const context = await managementContext(req);
   if ('error' in context) return NextResponse.json({ error: context.error }, { status: context.status });
-  if (context.role !== 'super_admin') return NextResponse.json({ error: 'Only the Owner can permanently delete a test merchant.' }, { status: 403 });
+  if (context.role !== 'super_admin') return NextResponse.json({ error: 'Only the Owner can permanently delete an eligible merchant.' }, { status: 403 });
   const body = await req.json().catch(() => ({}));
   const merchantId = typeof body.merchantId === 'string' ? body.merchantId : '';
   const confirmName = typeof body.confirmName === 'string' ? body.confirmName : '';

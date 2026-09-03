@@ -16,7 +16,7 @@ export async function GET(req: Request) {
   const terminal = context.admin.schema('gimml_terminal');
   const [merchants, devices, programs, integrations] = await Promise.all([
     terminal.from('merchants').select('id,display_name').order('display_name'),
-    terminal.from('devices').select('id,merchant_id,serial_number,enrollment_state').like('serial_number', '6459%').order('serial_number'),
+    terminal.from('devices').select('id,merchant_id,serial_number,enrollment_state').order('serial_number'),
     terminal.from('closed_loop_programs').select('id,merchant_id,display_name,bin_prefix,enabled').order('display_name'),
     context.admin.from('merchant_integrations').select('merchant_id,provider,status,enabled,last_verified_at,last_verification_error')
   ]);
@@ -59,4 +59,3 @@ export async function POST(req: Request) {
   ];
   return NextResponse.json({ provider: provider.name, matchedProgram: matched?.display_name ?? null, testBin, amountMinor, checks, passed: checks.filter(check => !('blocked' in check && check.blocked)).every(check => check.passed), dryRun: true });
 }
-

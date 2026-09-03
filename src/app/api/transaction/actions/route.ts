@@ -1,140 +1,87 @@
 import { NextResponse } from 'next/server';
-import {
-  canAccessMerchant,
-  dashboardRequestContext
-} from '../../../../lib/dashboard-request';
+import { canAccessMerchant, dashboardRequestContext, hasDashboardPermission } from '../../../../lib/dashboard-request';
 
-const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const transactionIdPattern = /^[A-Za-z0-9_.:-]{1,128}$/;
+
+function json(body: unknown, status = 200) {
+  return NextResponse.json(body, { status, headers: { 'Cache-Control': 'private, no-store, max-age=0' } });
+}
 
 function transactionIdsFrom(req: Request) {
   const values = new URL(req.url).searchParams.get('transaction_ids')?.split(',') ?? [];
-  return [...new Set(values.map((value) => value.trim()).filter((value) => uuidPattern.test(value)))].slice(0, 200);
+  return [...new Set(values.map(value => value.trim()).filter(value => transactionIdPattern.test(value)))].slice(0, 200);
 }
 
 export async function GET(req: Request) {
   const context = await dashboardRequestContext(req);
-  if ('error' in context) {
-    return NextResponse.json({ error: context.error }, { status: context.status });
-  }
-
+  if ('error' in context) return json({ error: context.error }, context.status);
+  if (!hasDashboardPermission(context, 'transactions.view')) return json({ error: 'You do not have permission to view transaction actions.' }, 403);
   const transactionIds = transactionIdsFrom(req);
-  if (!transactionIds.length) return NextResponse.json({ actions: [] });
-
-  let query = context.admin
-    .from('transaction_actions')
-    .select('id, transaction_id, action_type, amount, status, requested_at, completed_at, device_message, processor_reference')
-    .in('transaction_id', transactionIds)
-    .order('requested_at', { ascending: false });
-
-  if (context.merchantIds !== null) {
-    if (!context.merchantIds.length) return NextResponse.json({ actions: [] });
-    query = query.in('merchant_id', context.merchantIds);
-  }
-
+  if (!transactionIds.length || context.merchantIds?.length === 0) return json({ actions: [] });
+  const terminal = context.admin.schema('gimml_terminal');
+  let query = terminal.from('device_commands')
+    .select('id, merchant_id, action, state, created_at, completed_at, outcome_message, processor_reference, processor_transaction_id')
+    .eq('action', 'void').in('processor_transaction_id', transactionIds).order('created_at', { ascending: false });
+  if (context.merchantIds !== null) query = query.in('merchant_id', context.merchantIds);
   const { data, error } = await query;
   if (error) {
-    console.error('Transaction action lookup failed:', error);
-    return NextResponse.json({ error: 'Transaction actions could not be loaded.' }, { status: 500 });
+    console.error('[transaction/actions] unified command lookup failed', error);
+    return json({ error: 'Transaction actions could not be loaded.' }, 500);
   }
-
-  return NextResponse.json({ actions: data ?? [] });
+  return json({ actions: (data ?? []).map(command => ({
+    id: command.id,
+    transaction_id: command.processor_transaction_id,
+    action_type: command.action,
+    status: command.state,
+    requested_at: command.created_at,
+    completed_at: command.completed_at,
+    device_message: command.outcome_message,
+    processor_reference: command.processor_reference
+  })) });
 }
 
 export async function POST(req: Request) {
   const context = await dashboardRequestContext(req);
-  if ('error' in context) {
-    return NextResponse.json({ error: context.error }, { status: context.status });
-  }
-
-  if (context.role === 'sales_rep') {
-    return NextResponse.json(
-      { error: 'Sales representatives can review transactions but cannot void or refund them.' },
-      { status: 403 }
-    );
-  }
-
+  if ('error' in context) return json({ error: context.error }, context.status);
+  if (!hasDashboardPermission(context, 'transactions.actions')) return json({ error: 'You do not have permission to void or refund transactions.' }, 403);
   const body = await req.json().catch(() => ({}));
-  const transactionId = typeof body.transactionId === 'string' ? body.transactionId : '';
-  const actionType = body.actionType === 'void' || body.actionType === 'refund'
-    ? body.actionType
-    : null;
+  const transactionId = typeof body.transactionId === 'string' ? body.transactionId.trim() : '';
+  const actionType = body.actionType === 'void' || body.actionType === 'refund' ? body.actionType : null;
+  if (!transactionIdPattern.test(transactionId) || !actionType) return json({ error: 'Choose a valid transaction action.' }, 400);
 
-  if (!uuidPattern.test(transactionId) || !actionType) {
-    return NextResponse.json({ error: 'Choose a valid transaction action.' }, { status: 400 });
-  }
-
-  const { data: transaction, error: transactionError } = await context.admin
-    .from('transactions')
-    .select('id, device_id, merchant_id, amount, processed_amount, status, transaction_id')
-    .eq('id', transactionId)
-    .maybeSingle();
-
+  const terminal = context.admin.schema('gimml_terminal');
+  const { data: transaction, error: transactionError } = await terminal.from('transactions')
+    .select('id, device_id, merchant_id, amount_minor, status, processor_reference').eq('id', transactionId).maybeSingle();
   if (transactionError) {
-    console.error('Transaction action source lookup failed:', transactionError);
-    return NextResponse.json({ error: 'The transaction could not be checked.' }, { status: 500 });
+    console.error('[transaction/actions] unified transaction lookup failed', transactionError);
+    return json({ error: 'The transaction could not be checked.' }, 500);
   }
-  if (!transaction || !canAccessMerchant(context, transaction.merchant_id)) {
-    return NextResponse.json({ error: 'Transaction not found.' }, { status: 404 });
-  }
-  if (transaction.status !== 'approved') {
-    return NextResponse.json(
-      { error: 'Only an approved transaction can be voided or refunded.' },
-      { status: 400 }
-    );
-  }
-  if (actionType === 'void' && !transaction.transaction_id) {
-    return NextResponse.json(
-      { error: 'This transaction is missing the processor ID needed for a void.' },
-      { status: 400 }
-    );
-  }
+  if (!transaction || !canAccessMerchant(context, transaction.merchant_id)) return json({ error: 'Transaction not found.' }, 404);
+  if (transaction.status !== 'approved') return json({ error: 'Only an approved transaction can be voided or refunded.' }, 400);
 
-  const actionAmount = Number(transaction.processed_amount ?? transaction.amount);
-  if (!Number.isFinite(actionAmount) || actionAmount <= 0) {
-    return NextResponse.json({ error: 'The original transaction amount is invalid.' }, { status: 400 });
-  }
-
-  const { data: credential, error: credentialError } = await context.admin
-    .from('device_command_credentials')
-    .select('device_id')
-    .eq('device_id', transaction.device_id)
-    .is('disabled_at', null)
-    .maybeSingle();
-
-  if (credentialError) {
-    console.error('Device command credential lookup failed:', credentialError);
-    return NextResponse.json({ error: 'The device could not be checked.' }, { status: 500 });
-  }
-  if (!credential) {
-    return NextResponse.json(
-      { error: 'Remote actions are not yet enabled for this device.' },
-      { status: 409 }
-    );
-  }
-
-  const { data: action, error: insertError } = await context.admin
-    .from('transaction_actions')
-    .insert({
-      transaction_id: transaction.id,
-      device_id: transaction.device_id,
-      merchant_id: transaction.merchant_id,
-      action_type: actionType,
-      amount: actionAmount,
-      requested_by: context.user.id
-    })
-    .select('id, transaction_id, action_type, amount, status, requested_at')
-    .single();
-
-  if (insertError?.code === '23505') {
-    return NextResponse.json(
-      { error: 'A Void or Refund request is already active for this transaction.' },
-      { status: 409 }
-    );
-  }
+  const command = {
+    id: crypto.randomUUID(),
+    merchant_id: transaction.merchant_id,
+    device_id: transaction.device_id,
+    capability_key: actionType === 'void' ? 'VOID' : 'REFUND',
+    action: actionType,
+    amount_minor: actionType === 'refund' ? Number(transaction.amount_minor) : null,
+    processor_transaction_id: actionType === 'void' ? (transaction.processor_reference || transaction.id) : null,
+    state: 'queued',
+    expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+    created_by: context.user.id
+  };
+  const { data: created, error: insertError } = await terminal.from('device_commands').insert(command)
+    .select('id, action, state, created_at').single();
   if (insertError) {
-    console.error('Transaction action creation failed:', insertError);
-    return NextResponse.json({ error: 'The request could not be queued.' }, { status: 500 });
+    console.error('[transaction/actions] unified command creation failed', insertError);
+    return json({ error: 'The request could not be queued.' }, 500);
   }
-
-  return NextResponse.json({ action }, { status: 201 });
+  return json({ action: {
+    id: created.id,
+    transaction_id: transaction.id,
+    action_type: created.action,
+    status: created.state,
+    requested_at: created.created_at
+  } }, 201);
 }

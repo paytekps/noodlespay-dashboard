@@ -36,76 +36,27 @@ const [loadError, setLoadError] = useState('');
 
 useEffect(() => {
   let active = true;
-
-  supabase.auth.getUser().then(async ({ data: { user } }) => {
-    if (!user || !active) return;
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .maybeSingle();
-    if (active) setProfileRole(profile?.role || '');
-  });
-
-  const request = supabase
-      .from('transactions')
-      
-.select(`
-  id,
-  created_at,
-  device_id,
-  merchant_id,
-  amount,
-  status,
-  payment_method,
-  authorization_source,
-
-  transaction_id,
-  authorization_code,
-  reference_number,
-
-  batch_id,
-  trace_no,
-
-  card_issuer,
-  card_bin,
-  last4,
-
-  account_type,
-  card_entry_method,
-
-  payment_program,
-
-  host_message,
-
-  base_amount,
-  tip_amount,
-  fee_amount,
-  cashback_amount,
-  processed_amount,
-
-  devices (
-    name
-  ),
-  merchants (
-    name
-  )
-`)
-      .order('created_at', { ascending: false });
-
-  request.then(({ data, error }) => {
+  void (async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      if (active) { setLoadError('Please sign in again.'); setLoading(false); }
+      return;
+    }
+    const response = await fetch('/api/dashboard/transactions', {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+      cache: 'no-store'
+    });
+    const payload = await response.json().catch(() => ({}));
     if (!active) return;
-
-    if (error) {
-      console.error('Error loading transactions:', error);
-      setLoadError('Transactions could not be loaded. Please refresh and try again.');
+    if (!response.ok) {
+      setLoadError(payload.error ?? 'Transactions could not be loaded. Please refresh and try again.');
       setLoading(false);
       return;
     }
-
-setTransactions(data || []);
-setLoading(false);
-  });
+    setProfileRole(payload.role ?? '');
+    setTransactions(payload.transactions ?? []);
+    setLoading(false);
+  })();
 
   return () => {
     active = false;

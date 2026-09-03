@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import {
   canAccessMerchant,
-  dashboardRequestContext
+  dashboardRequestContext,
+  hasDashboardPermission
 } from '../../../../../lib/dashboard-request';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -20,11 +21,14 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Choose a valid device.' }, { status: 400 });
   }
 
-  const { data: device, error: deviceError } = await context.admin
+  if (!hasDashboardPermission(context, 'devices.view')) {
+    return NextResponse.json({ error: 'You do not have permission to view device location.' }, { status: 403 });
+  }
+  const terminal = context.admin.schema('gimml_terminal');
+  const { data: device, error: deviceError } = await terminal
     .from('devices')
-    .select('id, merchant_id, location_latitude, location_longitude')
+    .select('id, merchant_id')
     .eq('id', deviceId)
-    .eq('status', 'active')
     .maybeSingle();
   if (deviceError) {
     console.error('Location map device lookup failed:', deviceError);
@@ -34,8 +38,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Device not found.' }, { status: 404 });
   }
 
-  const latitude = Number(device.location_latitude);
-  const longitude = Number(device.location_longitude);
+  const { data: status, error: statusError } = await terminal
+    .from('device_status')
+    .select('latitude, longitude')
+    .eq('device_id', deviceId)
+    .maybeSingle();
+  if (statusError) {
+    console.error('Location status lookup failed:', statusError);
+    return NextResponse.json({ error: 'The device location could not be checked.' }, { status: 500 });
+  }
+  const latitude = Number(status?.latitude);
+  const longitude = Number(status?.longitude);
   if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90
       || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
     return NextResponse.json({ error: 'This device does not have a GPS fix yet.' }, { status: 409 });
@@ -98,9 +111,9 @@ export async function POST(req: Request) {
   if ('error' in context) {
     return NextResponse.json({ error: context.error }, { status: context.status });
   }
-  if (context.role === 'sales_rep') {
+  if (!hasDashboardPermission(context, 'devices.configure')) {
     return NextResponse.json(
-      { error: 'Sales representatives can view location but cannot control a device.' },
+      { error: 'You do not have permission to request device location.' },
       { status: 403 }
     );
   }
@@ -111,11 +124,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Choose a valid device.' }, { status: 400 });
   }
 
-  const { data: device, error: deviceError } = await context.admin
+  const terminal = context.admin.schema('gimml_terminal');
+  const { data: device, error: deviceError } = await terminal
     .from('devices')
     .select('id, merchant_id')
     .eq('id', deviceId)
-    .eq('status', 'active')
     .maybeSingle();
   if (deviceError) {
     console.error('Location control device lookup failed:', deviceError);
@@ -125,39 +138,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Device not found.' }, { status: 404 });
   }
 
-  const { data: credential, error: credentialError } = await context.admin
-    .from('device_command_credentials')
-    .select('device_id')
-    .eq('device_id', device.id)
-    .is('disabled_at', null)
-    .maybeSingle();
-  if (credentialError) {
-    console.error('Location control pairing lookup failed:', credentialError);
-    return NextResponse.json({ error: 'The device connection could not be checked.' }, { status: 500 });
-  }
-  if (!credential) {
-    return NextResponse.json(
-      { error: 'Remote controls are not yet paired for this device.' },
-      { status: 409 }
-    );
-  }
-
   const requestedAt = new Date().toISOString();
-  const { data: request, error: updateError } = await context.admin
-    .from('devices')
-    .update({
-      location_refresh_requested_at: requestedAt,
-      location_refresh_requested_by: context.user.id,
-      location_refresh_status: 'pending',
-      location_refresh_status_updated_at: requestedAt
-    })
-    .eq('id', device.id)
-    .select('location_refresh_requested_at, location_refresh_status')
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+  const { data: request, error: updateError } = await terminal
+    .from('device_location_requests')
+    .insert({ id: crypto.randomUUID(), device_id: device.id, requested_at: requestedAt, expires_at: expiresAt })
+    .select('id, requested_at, expires_at')
     .single();
   if (updateError) {
     console.error('Location refresh request failed:', updateError);
     return NextResponse.json({ error: 'The GPS request could not be sent.' }, { status: 500 });
   }
 
-  return NextResponse.json({ request });
+  return NextResponse.json({ request: { ...request, location_refresh_requested_at: request.requested_at, location_refresh_status: 'pending' } });
 }

@@ -1,4 +1,4 @@
-export type TerminalProfile = 'GIMML_ONE' | 'GIMML_MINI' | 'CUSTOM';
+export type TerminalProfile = 'GIMML_ONE' | 'GIMML_MINI';
 export type TerminalLayout = 'ONE' | 'MINI';
 
 export type TerminalCapability = {
@@ -23,6 +23,27 @@ export type TerminalDevice = {
   enrollment_state: string;
   config_revision: number;
   last_seen_at: string | null;
+  terminal_settings?: {
+    device_id: string;
+    value_json: {
+      default_cents?: number;
+      preset_cents?: number[];
+      increment_cents?: number;
+      maximum_cents?: number;
+      reset_seconds?: number;
+    };
+    revision: number;
+    updated_at: string;
+  } | null;
+  device_status?: {
+    device_id: string;
+    health_json: Record<string, unknown>;
+    latitude: number | null;
+    longitude: number | null;
+    accuracy_m: number | null;
+    location_recorded_at: string | null;
+    received_at: string;
+  } | null;
   device_profiles: Array<{ profile_key: TerminalProfile; layout_key: TerminalLayout }>;
 };
 

@@ -58,6 +58,7 @@ type MatbiaMerchantOption = {
 
 export default function MerchantIntegrationsPage() {
   const [role, setRole] = useState('merchant');
+  const [canManage, setCanManage] = useState(false);
   const [merchants, setMerchants] = useState<MerchantOption[]>([]);
   const [merchantId, setMerchantId] = useState('');
   const [username, setUsername] = useState('');
@@ -91,6 +92,7 @@ export default function MerchantIntegrationsPage() {
       if (!response.ok) throw new Error(payload.error || 'Integration setup could not be loaded.');
       const options = (payload.merchants ?? []) as MerchantOption[];
       setRole(payload.role || 'merchant');
+      setCanManage(Boolean(payload.can_manage));
       setMerchants(options);
       setMerchantId((current) => options.some((merchant) => merchant.id === current)
         ? current
@@ -230,7 +232,7 @@ export default function MerchantIntegrationsPage() {
             </div>
           )}
 
-          <div className="mt-6 grid gap-4">
+          {canManage ? <div className="mt-6 grid gap-4">
             <label className="text-sm font-medium">
               The OJC Fund username
               <input
@@ -267,9 +269,9 @@ export default function MerchantIntegrationsPage() {
               />
               <span className="mt-1 block text-xs font-normal text-gray-500">This is the organization value The OJC Fund requires when processing and voiding transactions.</span>
             </label>
-          </div>
+          </div> : null}
 
-          <div className="mt-6 flex flex-wrap gap-3">
+          {canManage ? <div className="mt-6 flex flex-wrap gap-3">
             <button type="button" onClick={() => void save()} disabled={!canSave || saving || disconnecting} className="rounded-lg bg-blue-700 px-5 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
               {saving ? 'Saving securely...' : integration?.configured ? 'Replace The OJC Fund credentials' : 'Save The OJC Fund credentials'}
             </button>
@@ -278,7 +280,7 @@ export default function MerchantIntegrationsPage() {
                 {disconnecting ? 'Disconnecting...' : 'Disconnect The OJC Fund'}
               </button>
             )}
-          </div>
+          </div> : null}
 
           <div className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
             These credentials stay on Gimml&apos;s protected server. They are never sent to the Datecs device, displayed again, or included in transaction reports.
@@ -294,6 +296,7 @@ export default function MerchantIntegrationsPage() {
 
 function PledgerIntegrationCard() {
   const [role, setRole] = useState('merchant');
+  const [canManage, setCanManage] = useState(false);
   const [merchants, setMerchants] = useState<PledgerMerchantOption[]>([]);
   const [merchantId, setMerchantId] = useState('');
   const [apiToken, setApiToken] = useState('');
@@ -327,6 +330,7 @@ function PledgerIntegrationCard() {
       if (!response.ok) throw new Error(payload.error || 'Pledger setup could not be loaded.');
       const options = (payload.merchants ?? []) as PledgerMerchantOption[];
       setRole(payload.role || 'merchant');
+      setCanManage(Boolean(payload.can_manage));
       setMerchants(options);
       setMerchantId((current) => options.some((merchant) => merchant.id === current)
         ? current
@@ -464,7 +468,7 @@ function PledgerIntegrationCard() {
         </div>
       )}
 
-      <div className="mt-6 grid gap-4">
+      {canManage ? <div className="mt-6 grid gap-4">
         <label className="text-sm font-medium">
           Pledger Bearer API token
           <input
@@ -500,9 +504,9 @@ function PledgerIntegrationCard() {
             className="mt-1 w-full rounded-lg border px-3 py-2 font-normal"
           />
         </label>
-      </div>
+      </div> : null}
 
-      <div className="mt-6 flex flex-wrap gap-3">
+      {canManage ? <div className="mt-6 flex flex-wrap gap-3">
         <button type="button" onClick={() => void save()} disabled={!canSave || saving || disconnecting} className="rounded-lg bg-blue-700 px-5 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
           {saving ? 'Saving securely...' : integration?.configured ? 'Replace Pledger credentials' : 'Save Pledger credentials'}
         </button>
@@ -511,7 +515,7 @@ function PledgerIntegrationCard() {
             {disconnecting ? 'Disconnecting...' : 'Disconnect Pledger'}
           </button>
         )}
-      </div>
+      </div> : null}
 
       <div className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
         The API token and tax ID stay on Gimml&apos;s protected server. They are never sent to the Datecs device or displayed again.
@@ -522,6 +526,7 @@ function PledgerIntegrationCard() {
 
 function MatbiaIntegrationCard() {
   const [role, setRole] = useState('merchant');
+  const [canManage, setCanManage] = useState(false);
   const [merchants, setMerchants] = useState<MatbiaMerchantOption[]>([]);
   const [merchantId, setMerchantId] = useState('');
   const [authorizationToken, setAuthorizationToken] = useState('');
@@ -554,6 +559,7 @@ function MatbiaIntegrationCard() {
       if (!response.ok) throw new Error(payload.error || 'Matbia setup could not be loaded.');
       const options = (payload.merchants ?? []) as MatbiaMerchantOption[];
       setRole(payload.role || 'merchant');
+      setCanManage(Boolean(payload.can_manage));
       setMerchants(options);
       setMerchantId((current) => options.some((merchant) => merchant.id === current)
         ? current
@@ -687,7 +693,7 @@ function MatbiaIntegrationCard() {
         </div>
       )}
 
-      <div className="mt-6 grid gap-4">
+      {canManage ? <div className="mt-6 grid gap-4">
         <label className="text-sm font-medium">
           Matbia authorization token
           <input
@@ -713,9 +719,9 @@ function MatbiaIntegrationCard() {
           />
           <span className="mt-1 block text-xs font-normal text-gray-500">Matbia calls this the orgUserHandle and recommends it as the most accurate organization match.</span>
         </label>
-      </div>
+      </div> : null}
 
-      <div className="mt-6 flex flex-wrap gap-3">
+      {canManage ? <div className="mt-6 flex flex-wrap gap-3">
         <button type="button" onClick={() => void save()} disabled={!canSave || saving || disconnecting} className="rounded-lg bg-blue-700 px-5 py-2 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
           {saving ? 'Saving securely...' : integration?.configured ? 'Replace Matbia credentials' : 'Save Matbia credentials'}
         </button>
@@ -724,7 +730,7 @@ function MatbiaIntegrationCard() {
             {disconnecting ? 'Disconnecting...' : 'Disconnect Matbia'}
           </button>
         )}
-      </div>
+      </div> : null}
 
       <div className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
         Both values stay on Gimml&apos;s protected server. They are never sent to the Datecs device or displayed again.

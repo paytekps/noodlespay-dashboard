@@ -120,7 +120,7 @@ export default function BatchReportsPage() {
     setError('');
     setNotice('');
     try {
-      const response = await authenticatedFetch('/api/admin/devices/settlements', {
+      const response = await authenticatedFetch('/api/dashboard/settlements', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deviceId: device.id, confirm: true })

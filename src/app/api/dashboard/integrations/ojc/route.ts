@@ -112,6 +112,7 @@ export async function GET(req: Request) {
   );
   return json({
     role: context.role,
+    can_manage: canManageIntegration(context),
     merchants: (merchants ?? []).map((merchant) => ({
       ...merchant,
       integration: publicIntegration(integrationByMerchant.get(merchant.id))

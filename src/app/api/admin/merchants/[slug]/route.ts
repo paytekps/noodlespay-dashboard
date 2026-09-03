@@ -11,15 +11,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   if (!merchant) return NextResponse.json({ error: 'Merchant not found.' }, { status: 404 });
 
   const terminal = context.admin.schema('gimml_terminal');
-  const [{ data: publicDevices, error: devicesError }, { data: combinedDevices, error: combinedError }, { data: profiles, error: profilesError }, { data: programs, error: programsError }] = await Promise.all([
-    context.admin.from('devices').select('id,name,serial_number,status').eq('merchant_id', merchant.id).like('serial_number', '6459%'),
-    terminal.from('devices').select('id,enrollment_state,config_revision').eq('merchant_id', merchant.id).like('serial_number', '6459%'),
+  const [{ data: combinedDevices, error: combinedError }, { data: profiles, error: profilesError }, { data: programs, error: programsError }] = await Promise.all([
+    terminal.from('devices').select('id,serial_number,enrollment_state,config_revision').eq('merchant_id', merchant.id).order('serial_number'),
     terminal.from('device_profiles').select('device_id,profile_key,layout_key'),
     terminal.from('closed_loop_programs').select('id,display_name,bin_prefix,enabled').eq('merchant_id', merchant.id).order('display_name')
   ]);
-  if (devicesError || combinedError || profilesError || programsError) return NextResponse.json({ error: 'Combined terminal details could not be loaded.' }, { status: 500 });
-  const combinedById = new Map((combinedDevices ?? []).map(device => [device.id, device]));
+  if (combinedError || profilesError || programsError) return NextResponse.json({ error: 'Combined terminal details could not be loaded.' }, { status: 500 });
   const profilesById = new Map((profiles ?? []).map(profile => [profile.device_id, profile]));
-  const devices = (publicDevices ?? []).flatMap(device => { const combined = combinedById.get(device.id); if (!combined) return []; const profile = profilesById.get(device.id); return [{ ...device, enrollment_state: combined.enrollment_state, config_revision: combined.config_revision, profile_key: profile?.profile_key ?? null, layout_key: profile?.layout_key ?? null }]; });
+  const devices = (combinedDevices ?? []).map(device => { const profile = profilesById.get(device.id); return { ...device, name: 'Datecs ' + device.serial_number, status: device.enrollment_state, profile_key: profile?.profile_key ?? null, layout_key: profile?.layout_key ?? null }; });
   return NextResponse.json({ merchant, devices, closedLoopPrograms: programs ?? [] });
 }

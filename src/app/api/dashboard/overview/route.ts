@@ -21,7 +21,7 @@ export async function GET(req: Request) {
   if (context.merchantIds?.length === 0) return NextResponse.json({ devices: 0, connectedDevices: 0, transactions: 0, approved: 0, declined: 0, approvedVolumeMinor: 0 });
 
   const terminal = context.admin.schema('gimml_terminal');
-  let deviceQuery = terminal.from('devices').select('id, last_seen_at').like('serial_number', '6459%');
+  let deviceQuery = terminal.from('devices').select('id, last_seen_at');
   let transactionQuery = terminal.from('dashboard_transactions').select('status, amount_minor');
   if (context.merchantIds) { deviceQuery = deviceQuery.in('merchant_id', context.merchantIds); transactionQuery = transactionQuery.in('merchant_id', context.merchantIds); }
   if (from) transactionQuery = transactionQuery.gte('occurred_at', from);

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createHmac, randomBytes } from 'node:crypto';
 import { canAccessMerchant, dashboardRequestContext, hasDashboardPermission } from '../../../../lib/dashboard-request';
 import { capabilityWorksWithLayout } from '../../../../lib/gimml-terminal-dashboard/compatibility';
+import { getStripe } from '../../../../lib/stripe';
 
 async function contextFor(req: Request) {
   const context = await dashboardRequestContext(req);
@@ -24,7 +25,7 @@ export async function GET(req: Request) {
   const [capabilities, merchants, plans, entitlements, transactions] = await Promise.all([
     terminal.from('capabilities').select('key, classification, scope, risk, active, catalog_items(sku, display_name, unit_price_cents, billing_interval, active)').order('key'),
     merchantQuery,
-    terminal.from('plans').select('key, display_name, description, active').order('sort_order'),
+    terminal.from('plans').select('key, display_name, description, active').in('key', ['GIMML_ONE', 'GIMML_MINI']).order('sort_order'),
     entitlementQuery,
     transactionQuery
   ]);
@@ -33,10 +34,23 @@ export async function GET(req: Request) {
     console.error('Unified terminal dashboard load failed:', error);
     return NextResponse.json({ error: 'Unified terminal settings could not be loaded.' }, { status: 500 });
   }
+  const deviceIds = (merchants.data ?? []).flatMap(merchant => (merchant.devices ?? []).map(device => device.id));
+  const [settingsResult, statusResult] = deviceIds.length ? await Promise.all([
+    terminal.from('device_settings').select('device_id, value_json, revision, updated_at').eq('key', 'terminal').in('device_id', deviceIds),
+    terminal.from('device_status').select('device_id, health_json, latitude, longitude, accuracy_m, location_recorded_at, received_at').in('device_id', deviceIds)
+  ]) : [{ data: [], error: null }, { data: [], error: null }];
+  if (settingsResult.error || statusResult.error) {
+    console.error('Unified terminal device detail load failed:', settingsResult.error || statusResult.error);
+    return NextResponse.json({ error: 'Unified terminal device details could not be loaded.' }, { status: 500 });
+  }
+  const settingsByDevice = new Map((settingsResult.data ?? []).map(setting => [setting.device_id, setting]));
+  const statusByDevice = new Map((statusResult.data ?? []).map(status => [status.device_id, status]));
   const normalizedMerchants = (merchants.data ?? []).map(merchant => ({
     ...merchant,
     devices: (merchant.devices ?? []).map(device => ({
       ...device,
+      terminal_settings: settingsByDevice.get(device.id) ?? null,
+      device_status: statusByDevice.get(device.id) ?? null,
       device_profiles: Array.isArray(device.device_profiles)
         ? device.device_profiles
         : device.device_profiles ? [device.device_profiles] : []
@@ -91,7 +105,8 @@ export async function PUT(req: Request) {
   }
   const profileKey = body.profileKey;
   const layoutKey = body.layoutKey;
-  if (!/^[0-9a-f-]{36}$/i.test(deviceId) || !['GIMML_ONE', 'GIMML_MINI', 'CUSTOM'].includes(profileKey) || !['ONE', 'MINI'].includes(layoutKey)) {
+  const validProfileLayout = (profileKey === 'GIMML_ONE' && layoutKey === 'ONE') || (profileKey === 'GIMML_MINI' && layoutKey === 'MINI');
+  if (!/^[0-9a-f-]{36}$/i.test(deviceId) || !validProfileLayout) {
     return NextResponse.json({ error: 'Choose a valid device, profile, and layout.' }, { status: 400 });
   }
   const terminal = context.admin.schema('gimml_terminal');
@@ -119,7 +134,7 @@ export async function POST(req: Request) {
   const terminal = context.admin.schema('gimml_terminal');
   const [{ data: device }, { data: item }, { data: deviceProfile }] = await Promise.all([
     terminal.from('devices').select('id, merchant_id').eq('id', deviceId).eq('merchant_id', merchantId).maybeSingle(),
-    terminal.from('catalog_items').select('sku, scope').eq('capability_key', capabilityKey).eq('active', true).limit(1).maybeSingle(),
+    terminal.from('catalog_items').select('sku, display_name, scope, unit_price_cents, currency, billing_interval').eq('capability_key', capabilityKey).eq('active', true).limit(1).maybeSingle(),
     terminal.from('device_profiles').select('layout_key').eq('device_id', deviceId).maybeSingle()
   ]);
   if (!device || !item) return NextResponse.json({ error: 'Device or catalog feature not found.' }, { status: 404 });
@@ -139,6 +154,38 @@ export async function POST(req: Request) {
     const { error: revisionError } = await terminal.rpc('bump_device_revision', { p_device: deviceId });
     if (revisionError) return NextResponse.json({ error: 'The option was saved, but terminal synchronization could not be scheduled.' }, { status: 500 });
     return NextResponse.json({ saved: true });
+  }
+  if (Number(item.unit_price_cents) > 0) {
+    const stripe = getStripe();
+    const siteUrl = process.env.NEXT_PUBLIC_APP_URL;
+    if (!stripe || !siteUrl) return NextResponse.json({ error: 'Billing checkout is not configured.' }, { status: 503 });
+    if (item.billing_interval === 'one_time') return NextResponse.json({ error: 'One-time option billing is not configured yet.' }, { status: 503 });
+    const requestId = crypto.randomUUID();
+    const { error: requestError } = await terminal.from('feature_checkout_requests').insert({
+      id: requestId, merchant_id: merchantId, device_id: deviceId, sku: item.sku,
+      capability_key: capabilityKey, requested_by: context.user.id,
+      unit_price_cents: item.unit_price_cents, billing_interval: item.billing_interval, status: 'created'
+    });
+    if (requestError) return NextResponse.json({ error: 'Billing checkout could not be prepared.' }, { status: 500 });
+    const metadata = { kind: 'gimml_feature', request_id: requestId, merchant_id: merchantId, device_id: deviceId, sku: item.sku, capability_key: capabilityKey };
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      line_items: [{ price_data: {
+        currency: String(item.currency).toLowerCase(),
+        unit_amount: Number(item.unit_price_cents),
+        recurring: { interval: item.billing_interval === 'annual' ? 'year' : 'month' },
+        product_data: { name: item.display_name }
+      }, quantity: 1 }],
+      subscription_data: { metadata },
+      metadata,
+      success_url: siteUrl + '/dashboard/terminal?billing=success',
+      cancel_url: siteUrl + '/dashboard/terminal?billing=cancelled'
+    });
+    const { error: updateError } = await terminal.from('feature_checkout_requests').update({
+      stripe_session_id: session.id, status: 'checkout_created', updated_at: new Date().toISOString()
+    }).eq('id', requestId);
+    if (updateError || !session.url) return NextResponse.json({ error: 'Billing checkout could not be opened.' }, { status: 500 });
+    return NextResponse.json({ checkoutUrl: session.url, pending: true }, { status: 202 });
   }
   let entitlementId = existing?.id;
   if (!existing || !['active', 'trial', 'trialing', 'grace', 'past_due'].includes(existing.state)) {

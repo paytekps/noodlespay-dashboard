@@ -133,12 +133,11 @@ export async function GET(req: Request) {
   const deviceId = new URL(req.url).searchParams.get('device_id')?.trim() ?? '';
   if (!uuidPattern.test(deviceId)) return NextResponse.json({ error: 'Choose a valid device.' }, { status: 400 });
 
-  const [deviceResult, profileResult, scheduleResult, pairingResult, historyResult] = await Promise.all([
-    context.admin.from('devices').select('id, name, serial_number, merchant_id, status, app_version, merchants(name)').eq('id', deviceId).maybeSingle(),
-    context.admin.from('device_provisioning_profiles').select('*').eq('device_id', deviceId).maybeSingle(),
-    context.admin.from('device_settlement_schedules').select('*').eq('device_id', deviceId).maybeSingle(),
-    context.admin.from('device_command_credentials').select('device_id').eq('device_id', deviceId).is('disabled_at', null).maybeSingle(),
-    context.admin.from('device_provisioning_history').select('id, action, changed_at, changed_by').eq('device_id', deviceId).order('changed_at', { ascending: false }).limit(20)
+  const terminal = context.admin.schema('gimml_terminal');
+  const [deviceResult, settingsResult, historyResult] = await Promise.all([
+    terminal.from('devices').select('id, serial_number, merchant_id, enrollment_state, key_fingerprint').eq('id', deviceId).maybeSingle(),
+    terminal.from('device_settings').select('key,value_json,updated_at').eq('device_id', deviceId).in('key', ['provisioning', 'settlement']),
+    terminal.from('audit_events').select('id, action, occurred_at, actor_id').eq('device_id', deviceId).eq('resource_type', 'device_provisioning').order('occurred_at', { ascending: false }).limit(20)
   ]);
 
   if (deviceResult.error) {
@@ -146,16 +145,19 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Device setup could not be loaded.' }, { status: 500 });
   }
   if (!deviceResult.data) return NextResponse.json({ error: 'Device not found.' }, { status: 404 });
-  const firstError = profileResult.error || scheduleResult.error || pairingResult.error || historyResult.error;
+  const firstError = settingsResult.error || historyResult.error;
   if (firstError) {
     console.error('Provisioning data lookup failed:', firstError);
     return NextResponse.json({ error: 'Device setup could not be loaded.' }, { status: 500 });
   }
-  const profile = { ...defaults, ...(profileResult.data ?? {}) };
-  const schedule = scheduleResult.data ?? { enabled: false, settlement_time: '03:00:00', time_zone: profile.time_zone };
+  const settings = new Map((settingsResult.data ?? []).map(row => [row.key, row.value_json as Record<string, unknown>]));
+  const profile = { ...defaults, ...(settings.get('provisioning') ?? {}) };
+  const storedSchedule = settings.get('settlement');
+  const schedule = storedSchedule ? { enabled: storedSchedule.enabled === true, settlement_time: storedSchedule.time ?? '03:00:00', time_zone: storedSchedule.timezone ?? profile.time_zone } : { enabled: false, settlement_time: '03:00:00', time_zone: profile.time_zone };
+  const { data: merchant } = await context.admin.from('merchants').select('name').eq('id', deviceResult.data.merchant_id).maybeSingle();
   return NextResponse.json({
-    device: deviceResult.data, profile, schedule,
-    history: historyResult.data ?? [], paired: Boolean(pairingResult.data),
+    device: { ...deviceResult.data, name: 'Datecs ' + deviceResult.data.serial_number, status: deviceResult.data.enrollment_state, merchants: { name: merchant?.name ?? 'Unknown merchant' } }, profile, schedule,
+    history: (historyResult.data ?? []).map(item => ({ id: item.id, action: item.action, changed_at: item.occurred_at, changed_by: item.actor_id })), paired: Boolean(deviceResult.data.key_fingerprint),
     readiness_errors: readinessErrors(profile, Boolean(schedule.enabled))
   });
 }
@@ -167,7 +169,8 @@ export async function PUT(req: Request) {
   const deviceId = typeof body.deviceId === 'string' ? body.deviceId : '';
   if (!uuidPattern.test(deviceId)) return NextResponse.json({ error: 'Choose a valid device.' }, { status: 400 });
 
-  const { data: device, error: deviceError } = await context.admin.from('devices').select('id, merchant_id, status').eq('id', deviceId).maybeSingle();
+  const terminal = context.admin.schema('gimml_terminal');
+  const { data: device, error: deviceError } = await terminal.from('devices').select('id, merchant_id, enrollment_state').eq('id', deviceId).maybeSingle();
   if (deviceError) {
     console.error('Provisioning save device lookup failed:', deviceError);
     return NextResponse.json({ error: 'Device setup could not be saved.' }, { status: 500 });
@@ -216,28 +219,30 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: errors[0], readiness_errors: errors }, { status: 400 });
   }
 
-  const { data: existing, error: existingError } = await context.admin.from('device_provisioning_profiles').select('device_id').eq('device_id', device.id).maybeSingle();
-  if (existingError) {
-    console.error('Provisioning profile lookup failed:', existingError);
-    return NextResponse.json({ error: 'Device setup could not be saved.' }, { status: 500 });
-  }
-  const profileValues = { ...profile, merchant_id: device.merchant_id, updated_by: context.user.id };
-  const profileSave = existing
-    ? await context.admin.from('device_provisioning_profiles').update(profileValues).eq('device_id', device.id).select('*').single()
-    : await context.admin.from('device_provisioning_profiles').insert({ device_id: device.id, created_by: context.user.id, ...profileValues }).select('*').single();
+  const now = new Date().toISOString();
+  const profileSave = await terminal.from('device_settings').upsert({
+    device_id: device.id, key: 'provisioning', value_json: profile, revision: 1, updated_at: now
+  }, { onConflict: 'device_id,key' }).select('value_json').single();
   if (profileSave.error) {
     console.error('Provisioning profile save failed:', profileSave.error);
     return NextResponse.json({ error: 'Device setup could not be saved.' }, { status: 500 });
   }
 
-  const { data: schedule, error: scheduleError } = await context.admin.from('device_settlement_schedules').upsert({
-    device_id: device.id, merchant_id: device.merchant_id, enabled: scheduleEnabled,
-    settlement_time: `${settlementTime}:00`, time_zone: scheduleTimeZone,
-    updated_by: context.user.id, updated_at: new Date().toISOString()
-  }, { onConflict: 'device_id' }).select('*').single();
+  const scheduleValue = { enabled: scheduleEnabled, time: settlementTime + ':00', timezone: scheduleTimeZone };
+  const { error: scheduleError } = await terminal.from('device_settings').upsert({
+    device_id: device.id, key: 'settlement', value_json: scheduleValue, revision: 1, updated_at: now
+  }, { onConflict: 'device_id,key' });
   if (scheduleError) {
     console.error('Settlement schedule save failed:', scheduleError);
     return NextResponse.json({ error: 'Processor setup saved, but settlement scheduling could not be saved.' }, { status: 500 });
   }
-  return NextResponse.json({ profile: profileSave.data, schedule, readiness_errors: readinessErrors(profileSave.data, Boolean(schedule.enabled)) });
+  const auditResult = await terminal.from('audit_events').insert({
+    merchant_id: device.merchant_id, device_id: device.id, actor_id: context.user.id,
+    action: 'updated', resource_type: 'device_provisioning', resource_id: device.id,
+    decision: 'allowed', correlation_id: crypto.randomUUID()
+  });
+  if (auditResult.error) console.error('Provisioning audit write failed:', auditResult.error);
+  const savedProfile = profileSave.data.value_json as Record<string, any>;
+  const schedule = { enabled: scheduleEnabled, settlement_time: scheduleValue.time, time_zone: scheduleTimeZone };
+  return NextResponse.json({ profile: savedProfile, schedule, readiness_errors: readinessErrors(savedProfile, scheduleEnabled) });
 }
