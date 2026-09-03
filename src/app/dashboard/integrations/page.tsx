@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../../lib/supabase';
+import { DonorsFundCard } from '../../../components/integrations/donors-fund-card';
 
 type IntegrationStatus = {
   configured: boolean;
@@ -290,6 +291,7 @@ export default function MerchantIntegrationsPage() {
 
       <PledgerIntegrationCard />
       <MatbiaIntegrationCard />
+      <DonorsFundCard />
     </main>
   );
 }
