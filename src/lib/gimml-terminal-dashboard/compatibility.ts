@@ -9,6 +9,15 @@ export function capabilityWorksWithLayout(capability: string, layout: TerminalLa
   return !incompatible[layout].has(capability);
 }
 
+export function capabilityCompatibilityLabel(capability: string) {
+  const one = capabilityWorksWithLayout(capability, 'ONE');
+  const mini = capabilityWorksWithLayout(capability, 'MINI');
+  if (one && mini) return 'Gimml One & Mini';
+  if (one) return 'Gimml One only';
+  if (mini) return 'Gimml Mini only';
+  return 'Not currently available';
+}
+
 export function profileLabel(profile: string) {
   if (profile === 'GIMML_ONE') return 'Gimml One';
   if (profile === 'GIMML_MINI') return 'Gimml Mini';

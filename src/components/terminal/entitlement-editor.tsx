@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { capabilityLabel, capabilityWorksWithLayout } from '../../lib/gimml-terminal-dashboard/compatibility';
+import { capabilityCompatibilityLabel, capabilityLabel, capabilityWorksWithLayout, profileLabel } from '../../lib/gimml-terminal-dashboard/compatibility';
 import type { TerminalCapability, TerminalDashboardData, TerminalDevice } from '../../lib/gimml-terminal-dashboard/types';
 
 export function EntitlementEditor({ merchantId, device, capabilities, initialEntitlements, token, canEdit }: { merchantId: string; device: TerminalDevice; capabilities: TerminalCapability[]; initialEntitlements: TerminalDashboardData['entitlements']; token: string; canEdit: boolean }) {
@@ -18,5 +18,5 @@ export function EntitlementEditor({ merchantId, device, capabilities, initialEnt
     if (response.ok) { setEnabled(current => { const next = new Set(current); checked ? next.add(capability) : next.delete(capability); return next; }); setMessage('Feature assignment saved.'); } else setMessage(payload.error ?? 'Feature assignment could not be saved.');
     setBusy('');
   }
-  return <div className="mt-4 border-t pt-4"><h4 className="text-sm font-semibold">Compatible options</h4><div className="mt-2 grid gap-2 sm:grid-cols-2">{compatibleCapabilities.map(capability => <label key={capability.key} className="flex items-center gap-2 rounded border p-2 text-sm"><input type="checkbox" checked={enabled.has(capability.key)} disabled={!canEdit || busy === capability.key} onChange={e => void toggle(capability.key, e.target.checked)} /><span>{capabilityLabel(capability.key)}</span><span className="ml-auto text-xs text-gray-500">per {capability.scope}</span></label>)}</div>{message && <div className="mt-2 text-xs text-gray-600">{message}</div>}</div>;
+  return <div className="mt-4 border-t pt-4"><h4 className="text-sm font-semibold">Options for {profileLabel(device.device_profiles[0]?.profile_key ?? 'GIMML_ONE')}</h4><p className="mt-1 text-xs text-gray-500">Only options compatible with this terminal type appear below.</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{compatibleCapabilities.map(capability => <label key={capability.key} className="rounded border p-2 text-sm"><span className="flex items-center gap-2"><input type="checkbox" checked={enabled.has(capability.key)} disabled={!canEdit || busy === capability.key} onChange={e => void toggle(capability.key, e.target.checked)} /><span className="font-medium">{capabilityLabel(capability.key)}</span></span><span className="mt-1 flex justify-between pl-5 text-xs text-gray-500"><span>{capabilityCompatibilityLabel(capability.key)}</span><span>per {capability.scope}</span></span></label>)}</div>{message && <div className="mt-2 text-xs text-gray-600">{message}</div>}</div>;
 }
