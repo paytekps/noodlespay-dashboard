@@ -64,31 +64,14 @@ begin
   end if;
 
   insert into public.merchant_integrations (
-    merchant_id,
-    provider,
-    credential_secret_id,
-    credential_hint,
-    organization_hint,
-    organization_name,
-    status,
-    enabled,
-    last_verification_error,
-    created_by,
-    updated_by,
-    updated_at
+    merchant_id, provider, credential_secret_id, credential_hint,
+    organization_hint, organization_name, status, enabled,
+    last_verification_error, created_by, updated_by, updated_at
   ) values (
-    p_merchant_id,
-    'matbia',
-    secret_id,
+    p_merchant_id, 'matbia', secret_id,
     'Token ending in ' || right(authorization_token, least(4, char_length(authorization_token))),
     'Organization key ending in ' || right(org_user_handle, least(4, char_length(org_user_handle))),
-    null,
-    'configured',
-    true,
-    null,
-    p_actor,
-    p_actor,
-    now()
+    null, 'configured', true, null, p_actor, p_actor, now()
   )
   on conflict (merchant_id, provider) do update set
     credential_secret_id = excluded.credential_secret_id,
@@ -172,4 +155,4 @@ grant execute on function public.store_merchant_matbia_credential(uuid, text, te
 grant execute on function public.read_merchant_matbia_credential(uuid)
   to service_role;
 grant execute on function public.disconnect_merchant_matbia_credential(uuid, uuid)
-  to service_role;
+  to service_role;;

@@ -38,4 +38,4 @@ comment on column public.inquiries.merchant_account_preference is
   'Whether the prospective merchant will use an existing merchant account or needs help obtaining one.';
 
 comment on column public.inquiries.processor_preference is
-  'Datecs processing network selected for the BlueCash-05: Fiserv Rapid Connect or TSYS / Global Payments Sierra.';
+  'Datecs processing network selected for the BlueCash-05: Fiserv Rapid Connect or TSYS / Global Payments Sierra.';;

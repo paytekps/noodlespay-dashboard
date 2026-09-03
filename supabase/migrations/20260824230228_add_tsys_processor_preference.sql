@@ -14,4 +14,4 @@ alter table public.inquiries
         'help_me_choose'::text
       ]
     )
-  );
+  );;

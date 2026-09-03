@@ -25,4 +25,4 @@ comment on column public.inquiries.processor_preference is
   'Merchant card-processing preference captured during a device order request. Compatibility must be confirmed before activation.';
 
 comment on column public.inquiries.current_processor_name is
-  'Optional processor or platform name supplied by the merchant during a device order request.';
+  'Optional processor or platform name supplied by the merchant during a device order request.';;

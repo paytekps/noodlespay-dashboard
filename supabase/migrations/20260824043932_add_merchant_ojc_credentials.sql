@@ -1,4 +1,3 @@
--- Store each merchant's OJC credentials in Supabase Vault, never in browser-readable tables.
 create table if not exists public.merchant_integrations (
   id uuid primary key default gen_random_uuid(),
   merchant_id uuid not null references public.merchants(id) on delete cascade,
@@ -211,3 +210,5 @@ revoke all on function public.disconnect_merchant_ojc_credential(uuid, uuid) fro
 grant execute on function public.store_merchant_ojc_credential(uuid, text, text, text, uuid) to service_role;
 grant execute on function public.read_merchant_ojc_credential(uuid) to service_role;
 grant execute on function public.disconnect_merchant_ojc_credential(uuid, uuid) to service_role;
+
+;

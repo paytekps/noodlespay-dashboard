@@ -1,4 +1,3 @@
--- Add Pledger as the second merchant-configurable closed-loop provider.
 alter table public.merchant_integrations
   drop constraint if exists merchant_integrations_provider_check;
 
@@ -179,3 +178,5 @@ grant execute on function public.read_merchant_pledger_credential(uuid)
   to service_role;
 grant execute on function public.disconnect_merchant_pledger_credential(uuid, uuid)
   to service_role;
+
+;
