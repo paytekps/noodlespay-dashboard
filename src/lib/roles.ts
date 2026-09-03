@@ -18,35 +18,48 @@ export function landingPageForRole(role: UserRole) {
   return '/dashboard';
 }
 
-export function canAccessPath(role: UserRole, pathname: string) {
+type PermissionSet = ReadonlySet<string>;
+
+function hasPermission(permissions: PermissionSet | undefined, permission: string) {
+  return permissions ? permissions.has(permission) : false;
+}
+
+export function landingPageForAccess(role: UserRole, permissions: ReadonlySet<string>) {
+  const overview = landingPageForRole(role);
+  const candidates = [
+    overview,
+    '/dashboard/devices',
+    '/dashboard/terminal',
+    '/transactions',
+    '/dashboard/settlements',
+    '/dashboard/integrations',
+    '/admin/merchants',
+    '/admin/users',
+    '/admin/inquiries',
+    '/admin/closed-loop-tests',
+    '/admin/permissions'
+  ];
+  return candidates.find(path => canAccessPath(role, path, permissions)) ?? '/';
+}
+
+export function canAccessPath(role: UserRole, pathname: string, permissions?: PermissionSet) {
   if (isPublicPath(pathname)) return true;
 
-  if (pathname.startsWith('/admin/users') || pathname.startsWith('/admin/permissions')) {
-    return role === 'super_admin';
+  if (pathname.startsWith('/admin/permissions')) {
+    return role === 'super_admin' && hasPermission(permissions, 'permissions.manage');
   }
-
-  if (role === 'super_admin' || role === 'admin') {
-    return pathname.startsWith('/admin') ||
-      pathname.startsWith('/dashboard/devices') ||
-      pathname.startsWith('/dashboard/terminal') ||
-      pathname.startsWith('/dashboard/integrations') ||
-      pathname.startsWith('/dashboard/settlements') ||
-      pathname.startsWith('/transactions');
-  }
-
-  if (role === 'sales_rep') {
-    return pathname.startsWith('/sales') ||
-      pathname.startsWith('/dashboard/devices') ||
-      pathname.startsWith('/dashboard/settlements') ||
-      pathname.startsWith('/transactions');
-  }
-
-  return pathname === '/dashboard' ||
-    pathname.startsWith('/dashboard/terminal') ||
-    pathname.startsWith('/dashboard/devices') ||
-    pathname.startsWith('/dashboard/integrations') ||
-    pathname.startsWith('/dashboard/settlements') ||
-    pathname.startsWith('/transactions');
+  if (pathname.startsWith('/admin/users')) return hasPermission(permissions, 'users.manage');
+  if (pathname.startsWith('/admin/merchants') || pathname.startsWith('/admin/merchant/')) return hasPermission(permissions, 'users.manage');
+  if (pathname.startsWith('/admin/closed-loop-tests')) return hasPermission(permissions, 'integrations.manage');
+  if (pathname.startsWith('/admin/inquiries')) return hasPermission(permissions, 'sales.manage');
+  if (pathname === '/admin' || pathname === '/sales' || pathname === '/dashboard') return hasPermission(permissions, 'overview.view');
+  if (/^\/dashboard\/devices\/[^/]+\/setup(?:\/|$)/.test(pathname)) return hasPermission(permissions, 'processor.manage');
+  if (pathname.startsWith('/dashboard/devices')) return hasPermission(permissions, 'devices.view');
+  if (pathname.startsWith('/dashboard/terminal')) return hasPermission(permissions, 'plans.view');
+  if (pathname.startsWith('/dashboard/integrations')) return hasPermission(permissions, 'integrations.view');
+  if (pathname.startsWith('/dashboard/settlements')) return hasPermission(permissions, 'batches.view');
+  if (pathname.startsWith('/transactions')) return hasPermission(permissions, 'transactions.view');
+  return false;
 }
 
 export function roleLabel(role: UserRole) {

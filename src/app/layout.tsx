@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { canAccessPath, isPublicPath, isUserRole, landingPageForRole, roleLabel, type UserRole } from '../lib/roles';
+import { canAccessPath, isPublicPath, isUserRole, landingPageForAccess, landingPageForRole, roleLabel, type UserRole } from '../lib/roles';
 
 const homeRoutes = new Set(['/admin', '/sales', '/dashboard']);
 
@@ -61,10 +61,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     if (loading || isPublicPage) return;
     if (!role) {
       router.replace('/');
-    } else if (!canAccessPath(role, pathname)) {
-      router.replace(landingPageForRole(role));
+    } else if (!canAccessPath(role, pathname, permissions)) {
+      router.replace(landingPageForAccess(role, permissions));
     }
-  }, [isPublicPage, loading, pathname, role, router]);
+  }, [isPublicPage, loading, pathname, permissions, role, router]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -77,7 +77,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     return <html lang="en"><body><div className="p-10">Loading...</div></body></html>;
   }
 
-  const allowed = isPublicPage || Boolean(role && canAccessPath(role, pathname));
+  const allowed = isPublicPage || Boolean(role && canAccessPath(role, pathname, permissions));
   const navClass = (href: string) => {
     const active = pathname === href || (!homeRoutes.has(href) && pathname.startsWith(`${href}/`));
     return `rounded px-3 py-2 text-sm font-medium transition ${active ? 'bg-white text-gray-900' : 'text-gray-200 hover:bg-gray-700 hover:text-white'}`;
@@ -92,14 +92,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <span className="mr-3 text-lg font-bold tracking-tight">Gimml</span>
               {isMarketingPage ? <><Link className={navClass('/')} href="/">Home</Link><Link className={navClass('/how-it-works')} href="/how-it-works">How it works</Link><Link className={navClass('/pricing')} href="/pricing">Plans</Link><Link className={navClass('/contact')} href="/contact">Contact</Link></> : <>
                 {permissions.has('overview.view') && <Link className={navClass(role === 'super_admin' || role === 'admin' ? '/admin' : role === 'sales_rep' ? '/sales' : '/dashboard')} href={role === 'super_admin' || role === 'admin' ? '/admin' : role === 'sales_rep' ? '/sales' : '/dashboard'}>Overview</Link>}
-                {(role === 'super_admin' || role === 'admin') && <Link className={navClass('/admin/merchants')} href="/admin/merchants">Merchants</Link>}
+                {permissions.has('users.manage') && <Link className={navClass('/admin/merchants')} href="/admin/merchants">Merchants</Link>}
                 {permissions.has('devices.view') && <Link className={navClass('/dashboard/devices')} href="/dashboard/devices">Devices</Link>}
                 {permissions.has('plans.view') && <Link className={navClass('/dashboard/terminal')} href="/dashboard/terminal">{role === 'merchant' ? 'Plans & Options' : 'Plans & Features'}</Link>}
                 {permissions.has('transactions.view') && <Link className={navClass('/transactions')} href="/transactions">Transactions</Link>}
                 {permissions.has('batches.view') && <Link className={navClass('/dashboard/settlements')} href="/dashboard/settlements">Batches</Link>}
                 {permissions.has('integrations.view') && <Link className={navClass('/dashboard/integrations')} href="/dashboard/integrations">{role === 'super_admin' || role === 'admin' ? 'Integrations' : 'Integration Status'}</Link>}
-                {(role === 'super_admin' || role === 'admin') && permissions.has('integrations.manage') && <Link className={navClass('/admin/closed-loop-tests')} href="/admin/closed-loop-tests">Card Testing</Link>}
-                {(role === 'super_admin' || role === 'admin') && permissions.has('sales.manage') && <Link className={navClass('/admin/inquiries')} href="/admin/inquiries">Sales</Link>}
+                {permissions.has('integrations.manage') && <Link className={navClass('/admin/closed-loop-tests')} href="/admin/closed-loop-tests">Card Testing</Link>}
+                {permissions.has('sales.manage') && <Link className={navClass('/admin/inquiries')} href="/admin/inquiries">Sales</Link>}
                 {permissions.has('users.manage') && <Link className={navClass('/admin/users')} href="/admin/users">Users</Link>}
                 {role === 'super_admin' && permissions.has('permissions.manage') && <Link className={navClass('/admin/permissions')} href="/admin/permissions">Permissions</Link>}
               </>}
