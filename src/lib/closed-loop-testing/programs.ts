@@ -2,7 +2,7 @@ export const closedLoopTestPrograms = [
   { key: 'ojc', name: 'The OJC Fund', adapterStatus: 'configuration_ready' },
   { key: 'pledger', name: 'Pledger', adapterStatus: 'configuration_ready' },
   { key: 'matbia', name: 'Matbia', adapterStatus: 'configuration_ready' },
-  { key: 'donors_fund', name: 'The Donors Fund', adapterStatus: 'adapter_pending' }
+  { key: 'donors_fund', name: 'The Donors Fund', adapterStatus: 'configuration_ready' }
 ] as const;
 
 export type ClosedLoopTestProgramKey = typeof closedLoopTestPrograms[number]['key'];
@@ -10,4 +10,3 @@ export type ClosedLoopTestProgramKey = typeof closedLoopTestPrograms[number]['ke
 export function closedLoopTestProgram(key: string) {
   return closedLoopTestPrograms.find(program => program.key === key);
 }
-

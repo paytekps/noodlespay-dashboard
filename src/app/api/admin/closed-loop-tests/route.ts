@@ -43,7 +43,7 @@ export async function POST(req: Request) {
   const [{ data: device }, { data: programs }, { data: integration }, { data: entitlement }] = await Promise.all([
     terminal.from('devices').select('id,serial_number,enrollment_state').eq('id', deviceId).eq('merchant_id', merchantId).maybeSingle(),
     terminal.from('closed_loop_programs').select('id,display_name,bin_prefix,enabled').eq('merchant_id', merchantId),
-    providerKey === 'donors_fund' ? Promise.resolve({ data: null }) : context.admin.from('merchant_integrations').select('provider,status,enabled,last_verified_at').eq('merchant_id', merchantId).eq('provider', providerKey).maybeSingle(),
+    context.admin.from('merchant_integrations').select('provider,status,enabled,last_verified_at').eq('merchant_id', merchantId).eq('provider', providerKey).maybeSingle(),
     terminal.from('merchant_entitlements').select('id,state').eq('merchant_id', merchantId).eq('capability_key', 'CLOSED_LOOP_IDENTIFY').in('state', ['active','trial','trialing','grace','past_due']).limit(1).maybeSingle()
   ]);
   if (!device) return NextResponse.json({ error: 'The selected combined Datecs device was not found.' }, { status: 404 });
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
     { key: 'entitlement', label: 'Closed-loop identification is entitled', passed: Boolean(entitlement), detail: entitlement ? `Entitlement is ${entitlement.state}.` : 'Enable Closed-loop identification for this merchant.' },
     { key: 'bin', label: 'Simulated BIN matches an enabled program', passed: Boolean(matched), detail: matched ? `Matched ${matched.display_name} using prefix ${matched.bin_prefix}.` : 'No enabled merchant program matches this test BIN.' },
     { key: 'routing', label: 'Matched program routes to the selected provider', passed: Boolean(matched && providerNameMatches(matched.display_name, providerKey)), detail: matched && providerNameMatches(matched.display_name, providerKey) ? `Would route to ${provider.name}.` : `The matched program name must identify ${provider.name}.` },
-    { key: 'credentials', label: 'Provider connection is configured', passed: providerKey === 'donors_fund' ? false : Boolean(integration?.enabled && ['configured','verified'].includes(integration.status)), detail: providerKey === 'donors_fund' ? 'The Donors Fund adapter and credential setup are still pending.' : integration ? `Connection status: ${integration.status}.` : 'No provider connection is configured for this merchant.' },
+    { key: 'credentials', label: 'Provider connection is configured', passed: Boolean(integration?.enabled && ['configured','verified'].includes(integration.status)), detail: integration ? `Connection status: ${integration.status}.` : 'No provider connection is configured for this merchant.' },
     { key: 'isolation', label: 'No live payment or production report was created', passed: true, detail: `Dry run only for $${(amountMinor / 100).toFixed(2)}; no card data was used or stored.` },
     { key: 'datecs', label: 'Physical Datecs BIN recognition', passed: false, blocked: true, detail: 'Blocked until Datecs returns the verified BIN/card identifier.' }
   ];
