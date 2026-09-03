@@ -34,7 +34,7 @@ const defaults: Record<UserRole, readonly DashboardPermission[]> = {
     'reports.view', 'integrations.view', 'processor.view', 'audit.view'
   ],
   merchant: [
-    'overview.view', 'devices.view', 'devices.configure', 'plans.view', 'plans.select',
+    'overview.view', 'devices.view', 'devices.configure', 'plans.view',
     'features.assign', 'transactions.view', 'transactions.actions', 'batches.view',
     'batches.manage', 'reports.view', 'integrations.view', 'processor.view', 'audit.view'
   ]

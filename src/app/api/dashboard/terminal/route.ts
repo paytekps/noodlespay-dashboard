@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createHmac, randomBytes } from 'node:crypto';
-import { dashboardRequestContext, hasDashboardPermission } from '../../../../lib/dashboard-request';
+import { canAccessMerchant, dashboardRequestContext, hasDashboardPermission } from '../../../../lib/dashboard-request';
 import { capabilityWorksWithLayout } from '../../../../lib/gimml-terminal-dashboard/compatibility';
 
 async function contextFor(req: Request) {
@@ -63,10 +63,11 @@ export async function PUT(req: Request) {
     if (!valid) return NextResponse.json({ error: 'Enter valid unified terminal settings.' }, { status: 400 });
     const terminal = context.admin.schema('gimml_terminal');
     const [{ data: device }, { data: deviceProfile }] = await Promise.all([
-      terminal.from('devices').select('id').eq('id', deviceId).maybeSingle(),
+      terminal.from('devices').select('id, merchant_id').eq('id', deviceId).maybeSingle(),
       terminal.from('device_profiles').select('profile_key').eq('device_id', deviceId).maybeSingle()
     ]);
     if (!device) return NextResponse.json({ error: 'Unified terminal not found.' }, { status: 404 });
+    if (!canAccessMerchant(context, device.merchant_id)) return NextResponse.json({ error: 'You cannot change settings for this merchant.' }, { status: 403 });
     const isMini = deviceProfile?.profile_key === 'GIMML_MINI';
     const normalized = {
       default_cents: isMini ? 0 : settings.default_cents,
@@ -114,6 +115,7 @@ export async function POST(req: Request) {
   const capabilityKey = typeof body.capabilityKey === 'string' ? body.capabilityKey : '';
   const enabled = body.enabled === true;
   if (!/^[0-9a-f-]{36}$/i.test(merchantId) || !/^[0-9a-f-]{36}$/i.test(deviceId) || !/^[A-Z0-9_:-]{2,64}$/.test(capabilityKey)) return NextResponse.json({ error: 'Choose a valid merchant, device, and feature.' }, { status: 400 });
+  if (!canAccessMerchant(context, merchantId)) return NextResponse.json({ error: 'You cannot change options for this merchant.' }, { status: 403 });
   const terminal = context.admin.schema('gimml_terminal');
   const [{ data: device }, { data: item }, { data: deviceProfile }] = await Promise.all([
     terminal.from('devices').select('id, merchant_id').eq('id', deviceId).eq('merchant_id', merchantId).maybeSingle(),
@@ -127,9 +129,15 @@ export async function POST(req: Request) {
   const { data: existing } = await terminal.from('merchant_entitlements').select('id, state').eq('merchant_id', merchantId).eq('sku', item.sku).order('starts_at', { ascending: false }).limit(1).maybeSingle();
   if (!enabled) {
     if (existing) {
-      await terminal.from('device_assignments').update({ revoked_at: new Date().toISOString() }).eq('entitlement_id', existing.id).eq('device_id', deviceId).is('revoked_at', null);
-      if (item.scope === 'merchant') await terminal.from('merchant_entitlements').update({ state: 'suspended' }).eq('id', existing.id);
+      const assignmentResult = await terminal.from('device_assignments').update({ revoked_at: new Date().toISOString() }).eq('entitlement_id', existing.id).eq('device_id', deviceId).is('revoked_at', null);
+      if (assignmentResult.error) return NextResponse.json({ error: 'Feature assignment could not be removed.' }, { status: 500 });
+      if (item.scope === 'merchant') {
+        const entitlementResult = await terminal.from('merchant_entitlements').update({ state: 'suspended' }).eq('id', existing.id);
+        if (entitlementResult.error) return NextResponse.json({ error: 'Merchant feature could not be disabled.' }, { status: 500 });
+      }
     }
+    const { error: revisionError } = await terminal.rpc('bump_device_revision', { p_device: deviceId });
+    if (revisionError) return NextResponse.json({ error: 'The option was saved, but terminal synchronization could not be scheduled.' }, { status: 500 });
     return NextResponse.json({ saved: true });
   }
   let entitlementId = existing?.id;
@@ -145,6 +153,8 @@ export async function POST(req: Request) {
       if (error) return NextResponse.json({ error: 'Feature could not be assigned to the device.' }, { status: 500 });
     }
   }
+  const { error: revisionError } = await terminal.rpc('bump_device_revision', { p_device: deviceId });
+  if (revisionError) return NextResponse.json({ error: 'The option was saved, but terminal synchronization could not be scheduled.' }, { status: 500 });
   return NextResponse.json({ saved: true });
 }
 

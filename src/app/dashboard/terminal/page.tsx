@@ -31,8 +31,9 @@ export default function TerminalManagementPage() {
   if (error) return <main className="mx-auto max-w-6xl p-10"><h1 className="text-3xl font-bold">Gimml Terminal</h1><div className="mt-6 rounded border border-red-200 bg-red-50 p-4 text-red-800">{error}</div></main>;
   if (!data) return <main className="p-10">Loading Gimml Terminal settings…</main>;
   const isOwner = role === 'super_admin';
+  const isAdministrator = role === 'admin' || isOwner;
   return <main className="mx-auto max-w-6xl space-y-6 p-10"><div><h1 className="text-3xl font-bold">Plans &amp; features</h1><p className="mt-2 text-gray-600">Terminal types, merchant subscriptions, compatible options, and owner pricing are separated below.</p></div>
-    <PlanOverview plans={data.plans} />
+    {isAdministrator ? <PlanOverview plans={data.plans} /> : null}
     <MerchantSubscriptions data={data} role={role} permissions={permissions} token={token} />
     {isOwner && permissions.has('catalog.pricing.manage') ? <CapabilityCatalog capabilities={data.capabilities} canEdit token={token} /> : null}
   </main>;
