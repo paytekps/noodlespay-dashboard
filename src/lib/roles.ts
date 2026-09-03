@@ -5,7 +5,7 @@ export type UserRole = typeof userRoles[number];
 const publicPaths = new Set(['/', '/login', '/how-it-works', '/pricing', '/signup', '/contact', '/order/success']);
 
 export function isPublicPath(pathname: string) {
-  return publicPaths.has(pathname) || pathname.startsWith('/device/');
+  return publicPaths.has(pathname);
 }
 
 export function isUserRole(value: unknown): value is UserRole {

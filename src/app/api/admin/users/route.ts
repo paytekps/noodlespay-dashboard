@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { dashboardRequestContext } from '../../../../lib/dashboard-request';
 
 const roles = ['super_admin', 'admin', 'sales_rep', 'merchant'] as const;
 type ManagedRole = typeof roles[number];
@@ -9,30 +10,12 @@ function isManagedRole(value: unknown): value is ManagedRole {
 }
 
 async function ownerContext(req: Request) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const token = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
-
-  if (!url || !serviceKey) return { error: 'User management is not configured.', status: 503 };
-  if (!token) return { error: 'Please sign in again.', status: 401 };
-
-  const admin = createClient(url, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false }
-  });
-  const { data: { user }, error: userError } = await admin.auth.getUser(token);
-  if (userError || !user) return { error: 'Your session could not be verified.', status: 401 };
-
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  if (profile?.role !== 'super_admin') {
+  const context = await dashboardRequestContext(req);
+  if ('error' in context) return context;
+  if (context.role !== 'super_admin') {
     return { error: 'Only the Owner can manage user access.', status: 403 };
   }
-
-  return { admin, userId: user.id };
+  return { admin: context.admin, userId: context.user.id };
 }
 
 async function listUsers(admin: SupabaseClient) {
